@@ -19,7 +19,7 @@ export default function AdminOrderDetailPage() {
 
   const fetchOrder = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orders/${code}`);
+      const res = await fetch(`/api/orders/${encodeURIComponent(code)}`);
       const data = await res.json();
       if (data.success) {
         setOrder(data.data);
@@ -64,7 +64,7 @@ export default function AdminOrderDetailPage() {
 
     setActionLoading(action);
     try {
-      const res = await fetch(`/api/orders/${code}/payment`, {
+      const res = await fetch(`/api/orders/${encodeURIComponent(code)}/payment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, reason: rejectReason }),
@@ -85,7 +85,7 @@ export default function AdminOrderDetailPage() {
   const handleStatusChange = async (newStatus: string) => {
     setActionLoading(newStatus);
     try {
-      const res = await fetch(`/api/orders/${code}/status`, {
+      const res = await fetch(`/api/orders/${encodeURIComponent(code)}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),

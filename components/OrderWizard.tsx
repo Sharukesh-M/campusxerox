@@ -251,7 +251,7 @@ export default function OrderWizard() {
         return;
       }
 
-      const paymentRes = await fetch(`/api/orders/${orderCode}/payment`, {
+      const paymentRes = await fetch(`/api/orders/${encodeURIComponent(orderCode)}/payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

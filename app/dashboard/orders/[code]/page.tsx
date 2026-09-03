@@ -20,7 +20,7 @@ export default function OrderDetailPage() {
 
   const fetchOrder = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orders/${code}`);
+      const res = await fetch(`/api/orders/${encodeURIComponent(code)}`);
       const data = await res.json();
       if (data.success) {
         setOrder(data.data);
@@ -40,7 +40,7 @@ export default function OrderDetailPage() {
 
   const handleDownloadReceipt = () => {
     // Open dynamic PDF receipt endpoint directly in new window/tab for instant download
-    window.open(`/api/orders/${code}/receipt`, '_blank');
+    window.open(`/api/orders/${encodeURIComponent(code)}/receipt`, '_blank');
   };
 
   const handleResubmitPayment = async () => {
@@ -67,7 +67,7 @@ export default function OrderDetailPage() {
         return;
       }
 
-      const paymentRes = await fetch(`/api/orders/${code}/payment`, {
+      const paymentRes = await fetch(`/api/orders/${encodeURIComponent(code)}/payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
