@@ -1,25 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
  * GET /api/pricing — Get current pricing settings & shop operating status.
+ * Publicly accessible so guest students can view Xerox rates and shop opening status.
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const adminSupabase = createAdminClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data, error } = await supabase
+    const { data, error } = await adminSupabase
       .from('pricing_settings')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (error) {
+    if (error || !data) {
       return NextResponse.json({ success: false, error: 'Failed to fetch pricing' }, { status: 500 });
     }
 

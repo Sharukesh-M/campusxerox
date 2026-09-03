@@ -13,13 +13,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { id: orderCode } = await params;
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const adminSupabase = createAdminClient();
+    const { id: rawCode } = await params;
+    const formattedCode = rawCode.startsWith('#') ? rawCode : `#${rawCode}`;
 
     const body = await request.json();
     const { screenshotPath, utrNumber } = body;
@@ -34,13 +30,12 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'UTR number must be between 6 and 30 characters' }, { status: 400 });
     }
 
-    // Get order
-    const { data: order, error: orderError } = await supabase
+    // Get order using admin client (matching rawCode or formattedCode)
+    const { data: order, error: orderError } = await adminSupabase
       .from('orders')
       .select('*')
-      .eq('order_code', orderCode)
-      .eq('user_id', user.id)
-      .single();
+      .or(`order_code.eq.${formattedCode},order_code.eq.${rawCode}`)
+      .maybeSingle();
 
     if (orderError || !order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
@@ -54,8 +49,8 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Update order with payment proof
-    const { data: updatedOrder, error: updateError } = await supabase
+    // Update order with payment proof using admin client
+    const { data: updatedOrder, error: updateError } = await adminSupabase
       .from('orders')
       .update({
         payment_screenshot_path: screenshotPath,
@@ -66,7 +61,7 @@ export async function POST(
         utr_match_status: 'NOT_CHECKED',
         ocr_extracted_utr: null,
       })
-      .eq('order_code', orderCode)
+      .eq('id', order.id)
       .select()
       .single();
 
@@ -76,7 +71,7 @@ export async function POST(
     }
 
     // Trigger async OCR (non-blocking)
-    triggerOcrCheck(orderCode, screenshotPath, trimmedUtr, order.user_id).catch(
+    triggerOcrCheck(order.order_code, screenshotPath, trimmedUtr, order.user_id).catch(
       (err) => console.error('Async OCR check failed:', err)
     );
 
