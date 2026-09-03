@@ -23,7 +23,7 @@ export default function HomePage() {
         {/* CTA */}
         <div className="animate-slide-up flex items-center justify-center gap-3 flex-wrap">
           <Link
-            href="/dashboard/new-order"
+            href="/order"
             className="inline-flex items-center gap-2 bg-primary-600 text-white px-8 py-3.5 rounded-xl font-semibold text-lg hover:bg-primary-700 active:scale-[0.98] shadow-lg shadow-primary-600/25"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
