@@ -12,11 +12,10 @@ import { ColorMode, Side, BindingType, type PricingSettings, type PdfDocumentCon
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    // Check optional authenticated user session
+    const { data: { user } } = await supabase.auth.getUser();
 
     const body = await request.json();
     const {
@@ -60,41 +59,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'At least one PDF file is required' }, { status: 400 });
     }
 
-    // Calculate total pages across all uploaded PDFs
-    const totalPageCount = processedFiles.reduce((sum, item) => sum + item.pageCount, 0);
+    // Total page count across all files
+    const totalPageCount = processedFiles.reduce((sum, f) => sum + (f.pageCount * f.copies), 0);
 
-    if (totalPageCount < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid total page count' }, { status: 400 });
-    }
-
-    // Validate enum options
-    if (!['BW', 'COLOR', 'CUSTOM_PAGES'].includes(colorMode)) {
-      return NextResponse.json({ success: false, error: 'Invalid color mode' }, { status: 400 });
-    }
-    if (!['SINGLE', 'BOTH'].includes(side)) {
-      return NextResponse.json({ success: false, error: 'Invalid side option' }, { status: 400 });
-    }
-    if (![1, 2].includes(pagesPerSheet)) {
-      return NextResponse.json({ success: false, error: 'Invalid pages per sheet' }, { status: 400 });
-    }
-    if (!copies || copies < 1 || copies > 100) {
-      return NextResponse.json({ success: false, error: 'Invalid copies count' }, { status: 400 });
-    }
-
-    // Fetch current pricing & shop open status
-    const { data: pricing, error: pricingError } = await supabase
+    // Check shop open status
+    const { data: pricing } = await adminSupabase
       .from('pricing_settings')
       .select('*')
-      .limit(1)
       .single();
 
-    if (pricingError || !pricing) {
-      console.error('Pricing Fetch Error:', pricingError);
-      return NextResponse.json({ success: false, error: 'Failed to fetch pricing settings' }, { status: 500 });
-    }
-
-    // Check shop opening status
-    if (pricing.shop_open === false) {
+    if (pricing && pricing.shop_open === false) {
       return NextResponse.json({
         success: false,
         error: pricing.shop_status_message || 'Shop is currently closed. New uploads are disabled.',
@@ -107,14 +81,12 @@ export async function POST(request: Request) {
       pricing as PricingSettings
     );
 
-    // Generate daily sequential order code starting at XR-001 (resets daily at midnight)
-    // Use admin client to check order_code existence across ALL users (bypassing student RLS read isolation)
-    const adminSupabase = createAdminClient();
+    // Generate daily sequential numeric order code starting at #101 (resets daily at midnight)
     let seqNumber = 1;
-    let orderCode = `XR-${String(seqNumber).padStart(3, '0')}`;
+    let orderCode = `#${100 + seqNumber}`;
 
     let retries = 0;
-    while (retries < 100) {
+    while (retries < 900) {
       const { data: existing } = await adminSupabase
         .from('orders')
         .select('id')
@@ -123,38 +95,39 @@ export async function POST(request: Request) {
 
       if (!existing) break;
       seqNumber++;
-      orderCode = `XR-${String(seqNumber).padStart(3, '0')}`;
+      orderCode = `#${100 + seqNumber}`;
       retries++;
     }
 
-    if (retries >= 100) {
-      // Fallback if 100 consecutive numbers are taken
-      orderCode = `XR-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+    if (retries >= 900) {
+      orderCode = `#${Math.floor(100 + Math.random() * 900)}`;
     }
 
-    // Ensure user profile record exists
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle();
+    // Ensure user profile record exists if user is authenticated
+    if (user) {
+      const { data: existingProfile } = await adminSupabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
 
-    if (!existingProfile) {
-      await supabase.from('profiles').insert({
-        id: user.id,
-        name: studentName.trim(),
-        email: user.email || '',
-        role: 'student',
-      });
+      if (!existingProfile) {
+        await adminSupabase.from('profiles').insert({
+          id: user.id,
+          name: studentName.trim(),
+          email: user.email || '',
+          role: 'student',
+        });
+      }
     }
 
-    // Create order record
+    // Create order record using admin client
     const mainFile = processedFiles[0];
-    const { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await adminSupabase
       .from('orders')
       .insert({
         order_code: orderCode,
-        user_id: user.id,
+        user_id: user?.id || null,
         student_name: studentName.trim(),
         phone_number: phoneNumber.trim(),
         files: processedFiles,

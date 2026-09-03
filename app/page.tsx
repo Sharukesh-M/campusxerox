@@ -21,15 +21,21 @@ export default function HomePage() {
         </div>
 
         {/* CTA */}
-        <div className="animate-slide-up">
+        <div className="animate-slide-up flex items-center justify-center gap-3 flex-wrap">
           <Link
-            href="/login"
+            href="/dashboard/new-order"
             className="inline-flex items-center gap-2 bg-primary-600 text-white px-8 py-3.5 rounded-xl font-semibold text-lg hover:bg-primary-700 active:scale-[0.98] shadow-lg shadow-primary-600/25"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             Order Xerox
+          </Link>
+          <Link
+            href="/track"
+            className="inline-flex items-center gap-2 bg-white text-surface-800 border border-surface-300 hover:border-surface-400 px-7 py-3.5 rounded-xl font-semibold text-lg shadow-sm hover:shadow active:scale-[0.98]"
+          >
+            Track Order
           </Link>
         </div>
 

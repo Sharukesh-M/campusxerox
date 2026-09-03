@@ -219,6 +219,18 @@ export default function NewOrderPage() {
 
       setOrderCode(data.data.order_code);
       setEstimatedPrice(Number(data.data.total_amount));
+
+      // Save order code locally for instant guest tracking
+      if (typeof window !== 'undefined') {
+        try {
+          const list = JSON.parse(localStorage.getItem('campusxerox_orders') || '[]');
+          if (!list.includes(data.data.order_code)) {
+            list.unshift(data.data.order_code);
+            localStorage.setItem('campusxerox_orders', JSON.stringify(list.slice(0, 10)));
+          }
+        } catch {}
+      }
+
       setStep(4);
     } catch {
       setError('Failed to create order. Please try again.');
@@ -268,7 +280,18 @@ export default function NewOrderPage() {
         return;
       }
 
-      router.push(`/dashboard/orders/${orderCode}`);
+      // Save order code locally for guest tracking
+      if (typeof window !== 'undefined') {
+        try {
+          const list = JSON.parse(localStorage.getItem('campusxerox_orders') || '[]');
+          if (!list.includes(orderCode)) {
+            list.unshift(orderCode);
+            localStorage.setItem('campusxerox_orders', JSON.stringify(list.slice(0, 10)));
+          }
+        } catch {}
+      }
+
+      router.push(`/track?code=${encodeURIComponent(orderCode)}`);
     } catch {
       setError('Failed to submit payment. Please try again.');
     } finally {
@@ -872,13 +895,21 @@ export default function NewOrderPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleSubmitPayment}
-            disabled={loading || !screenshotFile || !utrNumber.trim()}
-            className="w-full bg-primary-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
-          >
-            {loading ? 'Submitting...' : 'Submit Payment Proof'}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStep(3)}
+              className="flex-1 bg-surface-100 text-surface-700 py-3 rounded-xl font-semibold text-sm hover:bg-surface-200"
+            >
+              ← Previous (Review Order)
+            </button>
+            <button
+              onClick={handleSubmitPayment}
+              disabled={loading || !screenshotFile || !utrNumber.trim()}
+              className="flex-1 bg-primary-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+            >
+              {loading ? 'Submitting...' : 'Submit Payment Proof'}
+            </button>
+          </div>
         </div>
       )}
     </div>

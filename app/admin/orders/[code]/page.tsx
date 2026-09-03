@@ -384,37 +384,66 @@ export default function AdminOrderDetailPage() {
         </div>
 
         <div className="space-y-2 pt-2">
-          {order.order_status === 'ACCEPTED' && (
-            <ActionButton
-              label="Start Printing"
-              status="PRINTING"
-              color="primary"
-              loading={actionLoading}
-              onClick={() => handleStatusChange('PRINTING')}
-            />
+          {order.order_status === 'PAYMENT_SUBMITTED' && (
+            <div className="flex gap-2">
+              <ActionButton
+                label="✓ Accept Order"
+                status="ACCEPTED"
+                color="primary"
+                loading={actionLoading}
+                onClick={() => handleStatusChange('ACCEPTED')}
+              />
+              <button
+                onClick={async () => {
+                  if (confirm('Are you sure you want to cancel this order?')) {
+                    setActionLoading('CANCELLED');
+                    await fetch(`/api/orders/${order.order_code}/cancel`, { method: 'POST' });
+                    fetchOrder();
+                    setActionLoading('');
+                  }
+                }}
+                className="bg-danger-50 text-danger-600 hover:bg-danger-100 font-semibold px-4 py-2.5 rounded-xl text-sm border border-danger-200"
+              >
+                Cancel Order
+              </button>
+            </div>
           )}
-          {order.order_status === 'PRINTING' && (
-            <ActionButton
-              label="Mark Ready for Pickup"
-              status="READY_FOR_PICKUP"
-              color="success"
-              loading={actionLoading}
-              onClick={() => handleStatusChange('READY_FOR_PICKUP')}
-            />
+
+          {(order.order_status === 'ACCEPTED' || order.order_status === 'PRINTING') && (
+            <div className="flex gap-2">
+              <ActionButton
+                label="✓ Mark Done (Ready for Pickup)"
+                status="COMPLETED"
+                color="success"
+                loading={actionLoading}
+                onClick={() => handleStatusChange('COMPLETED')}
+              />
+              <button
+                onClick={async () => {
+                  if (confirm('Are you sure you want to cancel this order?')) {
+                    setActionLoading('CANCELLED');
+                    await fetch(`/api/orders/${order.order_code}/cancel`, { method: 'POST' });
+                    fetchOrder();
+                    setActionLoading('');
+                  }
+                }}
+                className="bg-danger-50 text-danger-600 hover:bg-danger-100 font-semibold px-4 py-2.5 rounded-xl text-sm border border-danger-200"
+              >
+                Cancel
+              </button>
+            </div>
           )}
-          {order.order_status === 'READY_FOR_PICKUP' && (
-            <ActionButton
-              label="Mark Completed"
-              status="COMPLETED"
-              color="primary"
-              loading={actionLoading}
-              onClick={() => handleStatusChange('COMPLETED')}
-            />
-          )}
+
           {order.order_status === 'COMPLETED' && (
-            <p className="text-sm text-success-600 font-medium text-center py-1">
-              ✓ Order completed & receipt ready
-            </p>
+            <div className="bg-success-50 border border-success-200 text-success-700 rounded-xl p-3 text-center text-sm font-bold">
+              ✓ Order Done & Ready for Pickup!
+            </div>
+          )}
+
+          {order.order_status === 'CANCELLED' && (
+            <div className="bg-danger-50 border border-danger-200 text-danger-700 rounded-xl p-3 text-center text-sm font-bold">
+              ✕ Order Cancelled
+            </div>
           )}
         </div>
       </div>

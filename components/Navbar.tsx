@@ -274,6 +274,9 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
 
             {/* Desktop nav links */}
             <div className="hidden sm:flex items-center gap-3">
+              <NavLink href="/track" active={pathname === '/track'}>
+                Track Order
+              </NavLink>
               {isAdmin ? (
                 <>
                   <NavLink href="/admin" active={pathname === '/admin'}>
@@ -293,14 +296,18 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
                   </NavLink>
                 </>
               )}
-              <div className="h-6 w-px bg-surface-200 dark:bg-slate-700" />
-              <span className="text-xs font-semibold text-surface-600 dark:text-slate-300">{userName}</span>
-              <button
-                onClick={handleLogout}
-                className="text-xs text-surface-500 hover:text-danger-600 dark:hover:text-danger-400 font-medium"
-              >
-                Logout
-              </button>
+              {userName && (
+                <>
+                  <div className="h-6 w-px bg-surface-200 dark:bg-slate-700" />
+                  <span className="text-xs font-semibold text-surface-600 dark:text-slate-300">{userName}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs text-surface-500 hover:text-danger-600 dark:hover:text-danger-400 font-medium"
+                  >
+                    Logout
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Mobile hamburger */}
