@@ -122,34 +122,62 @@ export async function POST(request: Request) {
     }
 
     // Create order record using admin client
+    // Prepare order payload
     const mainFile = processedFiles[0];
-    const { data: order, error: orderError } = await adminSupabase
+    const payload = {
+      order_code: orderCode,
+      user_id: user?.id || null,
+      student_name: studentName.trim(),
+      phone_number: phoneNumber.trim(),
+      files: processedFiles,
+      file_path: mainFile.filePath,
+      file_name: processedFiles.length === 1 ? mainFile.fileName : `${processedFiles.length} PDF Documents`,
+      page_count: totalPageCount,
+      color_mode: colorMode,
+      custom_color_pages: colorMode === 'CUSTOM_PAGES' ? customColorPages : null,
+      side: side,
+      pages_per_sheet: pagesPerSheet,
+      copies: copies || 1,
+      binding_type: bindingType,
+      binding_cost: priceBreakdown.bindingCost,
+      printing_subtotal: priceBreakdown.printingSubtotal,
+      total_amount: priceBreakdown.totalAmount,
+      price_snapshot: pricing,
+      payment_status: 'PAYMENT_SUBMITTED',
+      order_status: 'PAYMENT_SUBMITTED',
+      expires_at: calculateExpiryDate(pricing.file_retention_days),
+    };
+
+    let { data: order, error: orderError } = await adminSupabase
       .from('orders')
-      .insert({
-        order_code: orderCode,
-        user_id: user?.id || null,
-        student_name: studentName.trim(),
-        phone_number: phoneNumber.trim(),
-        files: processedFiles,
-        file_path: mainFile.filePath,
-        file_name: processedFiles.length === 1 ? mainFile.fileName : `${processedFiles.length} PDF Documents`,
-        page_count: totalPageCount,
-        color_mode: colorMode,
-        custom_color_pages: colorMode === 'CUSTOM_PAGES' ? customColorPages : null,
-        side: side,
-        pages_per_sheet: pagesPerSheet,
-        copies: copies || 1,
-        binding_type: bindingType,
-        binding_cost: priceBreakdown.bindingCost,
-        printing_subtotal: priceBreakdown.printingSubtotal,
-        total_amount: priceBreakdown.totalAmount,
-        price_snapshot: pricing,
-        payment_status: 'PAYMENT_SUBMITTED',
-        order_status: 'PAYMENT_SUBMITTED',
-        expires_at: calculateExpiryDate(pricing.file_retention_days),
-      })
+      .insert(payload)
       .select()
       .single();
+
+    // Fallback if DB user_id column has NOT NULL constraint: ensure a guest profile exists
+    if (orderError && (orderError.message.includes('user_id') || orderError.message.includes('not-null'))) {
+      const GUEST_ID = '00000000-0000-0000-0000-000000000000';
+      try {
+        await adminSupabase.from('profiles').upsert({
+          id: GUEST_ID,
+          name: 'Guest Student',
+          email: 'guest@campusxerox.internal',
+          role: 'student',
+        }, { onConflict: 'id' });
+      } catch {}
+
+      const retryRes = await adminSupabase
+        .from('orders')
+        .insert({
+          ...payload,
+          user_id: GUEST_ID,
+        })
+        .select()
+        .single();
+
+      order = retryRes.data;
+      orderError = retryRes.error;
+    }
 
     if (orderError) {
       console.error('Order Insert Error:', orderError);

@@ -663,6 +663,15 @@ export default function OrderWizard() {
             </div>
           </div>
 
+          {/* LIVE PRINT PREVIEW CANVAS */}
+          <PrintPreviewCanvas
+            colorMode={currentActivePdf.colorMode}
+            customColorPages={currentActivePdf.customColorPages}
+            side={currentActivePdf.side}
+            pagesPerSheet={currentActivePdf.pagesPerSheet}
+            pageCount={currentActivePdf.pageCount}
+          />
+
           {/* Total Price & Navigation */}
           <div className="bg-primary-50 border border-primary-200 rounded-2xl p-4 text-center">
             <p className="text-xs text-primary-600 font-medium mb-1">Grand Total Order Price</p>
