@@ -121,12 +121,46 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create order record using admin client
+    // Ensure valid user_id for guest orders (satisfies Supabase foreign key constraint)
+    let effectiveUserId = user?.id || null;
+
+    if (!effectiveUserId) {
+      try {
+        const guestEmail = 'guest@campusxerox.internal';
+        const { data: usersList } = await adminSupabase.auth.admin.listUsers();
+        let guestUser = usersList?.users?.find((u) => u.email === guestEmail);
+
+        if (!guestUser) {
+          const { data: created } = await adminSupabase.auth.admin.createUser({
+            email: guestEmail,
+            email_confirm: true,
+            user_metadata: { name: 'Guest Student' },
+          });
+          guestUser = created.user || undefined;
+        }
+
+        if (guestUser) {
+          effectiveUserId = guestUser.id;
+
+          try {
+            await adminSupabase.from('profiles').upsert({
+              id: guestUser.id,
+              name: 'Guest Student',
+              email: guestEmail,
+              role: 'student',
+            }, { onConflict: 'id' });
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Guest user auto-provisioning warning:', err);
+      }
+    }
+
     // Prepare order payload
     const mainFile = processedFiles[0];
     const payload = {
       order_code: orderCode,
-      user_id: user?.id || null,
+      user_id: effectiveUserId,
       student_name: studentName.trim(),
       phone_number: phoneNumber.trim(),
       files: processedFiles,
@@ -153,31 +187,6 @@ export async function POST(request: Request) {
       .insert(payload)
       .select()
       .single();
-
-    // Fallback if DB user_id column has NOT NULL constraint: ensure a guest profile exists
-    if (orderError && (orderError.message.includes('user_id') || orderError.message.includes('not-null'))) {
-      const GUEST_ID = '00000000-0000-0000-0000-000000000000';
-      try {
-        await adminSupabase.from('profiles').upsert({
-          id: GUEST_ID,
-          name: 'Guest Student',
-          email: 'guest@campusxerox.internal',
-          role: 'student',
-        }, { onConflict: 'id' });
-      } catch {}
-
-      const retryRes = await adminSupabase
-        .from('orders')
-        .insert({
-          ...payload,
-          user_id: GUEST_ID,
-        })
-        .select()
-        .single();
-
-      order = retryRes.data;
-      orderError = retryRes.error;
-    }
 
     if (orderError) {
       console.error('Order Insert Error:', orderError);
