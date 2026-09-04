@@ -17,6 +17,7 @@ export default function OrderDetailPage() {
   const [utrNumber, setUtrNumber] = useState('');
   const [resubError, setResubError] = useState('');
   const [resubLoading, setResubLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -117,8 +118,6 @@ export default function OrderDetailPage() {
   const isReady = order.order_status === 'READY_FOR_PICKUP';
   const isCompleted = order.order_status === 'COMPLETED';
   const isRejected = order.payment_status === 'PAYMENT_REJECTED';
-
-  const [cancelling, setCancelling] = useState(false);
 
   const handleCancelOrder = async () => {
     if (!confirm('Are you sure you want to cancel this order?')) return;
