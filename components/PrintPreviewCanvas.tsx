@@ -32,54 +32,75 @@ export default function PrintPreviewCanvas({
     return false;
   };
 
-  const [bgTheme, setBgTheme] = useState<'blueprint' | 'cyber' | 'warm' | 'slate'>('blueprint');
+  const [bgTheme, setBgTheme] = useState<'aurora' | 'sunset' | 'blueprint' | 'cyber' | 'warm' | 'paper'>('aurora');
 
-  const THEMES: Record<string, { bg: string; grid: string; glow: string; label: string }> = {
+  const THEMES: Record<string, { bg: string; grid: string; glow: string; label: string; isLight?: boolean }> = {
+    aurora: {
+      bg: 'bg-gradient-to-br from-emerald-950 via-teal-900 to-slate-950 border-emerald-700/40',
+      grid: 'bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:20px_20px] opacity-25',
+      glow: 'bg-emerald-500/20',
+      label: '🌌 Aurora',
+    },
+    sunset: {
+      bg: 'bg-gradient-to-br from-rose-950 via-purple-950 to-slate-950 border-rose-700/40',
+      grid: 'bg-[radial-gradient(#f43f5e_1px,transparent_1px)] [background-size:18px_18px] opacity-20',
+      glow: 'bg-rose-500/20',
+      label: '🌇 Sunset',
+    },
     blueprint: {
       bg: 'bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950 border-blue-800/40',
       grid: 'bg-[linear-gradient(to_right,#3b82f61a_1px,transparent_1px),linear-gradient(to_bottom,#3b82f61a_1px,transparent_1px)] [background-size:20px_20px]',
-      glow: 'bg-blue-500/10',
+      glow: 'bg-blue-500/15',
       label: '📐 Blueprint',
     },
     cyber: {
       bg: 'bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-950 border-purple-700/40',
       grid: 'bg-[radial-gradient(#a855f7_1px,transparent_1px)] [background-size:18px_18px] opacity-20',
-      glow: 'bg-purple-500/15',
+      glow: 'bg-purple-500/20',
       label: '✨ Cyber',
     },
     warm: {
       bg: 'bg-gradient-to-br from-amber-950 via-stone-900 to-zinc-950 border-amber-800/40',
       grid: 'bg-[radial-gradient(#f59e0b_1px,transparent_1px)] [background-size:24px_24px] opacity-15',
-      glow: 'bg-amber-500/10',
+      glow: 'bg-amber-500/15',
       label: '🪵 Studio',
     },
-    slate: {
-      bg: 'bg-gradient-to-br from-slate-900 via-zinc-900 to-slate-950 border-slate-700/50',
-      grid: 'bg-[radial-gradient(#64748b_1px,transparent_1px)] [background-size:16px_16px] opacity-15',
-      glow: 'bg-slate-500/10',
-      label: '⬛ Slate',
+    paper: {
+      bg: 'bg-gradient-to-br from-slate-200 via-gray-100 to-slate-300 border-slate-400 text-surface-900 shadow-xl',
+      grid: 'bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:16px_16px] opacity-30',
+      glow: 'bg-slate-400/20',
+      label: '📄 Light Desk',
+      isLight: true,
     },
   };
 
-  const activeTheme = THEMES[bgTheme] || THEMES.blueprint;
+  const activeTheme = THEMES[bgTheme] || THEMES.aurora;
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-2xl border transition-all duration-500 ${activeTheme.bg}`}>
+    <div className={`relative overflow-hidden rounded-2xl p-5 shadow-2xl border transition-all duration-500 ${
+      activeTheme.isLight ? 'text-surface-900' : 'text-white'
+    } ${activeTheme.bg}`}>
       {/* Background UI Grid texture accent */}
       <div className={`absolute inset-0 pointer-events-none ${activeTheme.grid}`} />
       <div className={`absolute -top-24 -left-24 w-64 h-64 rounded-full blur-3xl pointer-events-none ${activeTheme.glow}`} />
       <div className={`absolute -bottom-24 -right-24 w-64 h-64 rounded-full blur-3xl pointer-events-none ${activeTheme.glow}`} />
 
       {/* Header bar */}
-      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-white/10">
+      <div className={`relative z-10 flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b ${
+        activeTheme.isLight ? 'border-surface-300' : 'border-white/10'
+      }`}>
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center border border-white/20">
-            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center border ${
+            activeTheme.isLight ? 'bg-surface-900/10 border-surface-900/20 text-surface-900' : 'bg-white/10 border-white/20 text-white'
+          }`}>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </div>
-          <span className="text-xs font-bold text-surface-100 uppercase tracking-wider">
+          <span className={`text-xs font-bold uppercase tracking-wider ${
+            activeTheme.isLight ? 'text-surface-800' : 'text-surface-100'
+          }`}>
             Live Print Spec Preview
           </span>
         </div>
