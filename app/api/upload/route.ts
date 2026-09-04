@@ -14,8 +14,11 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const folderId = user?.id || 'guest';
+    // Verify student user authentication on server
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -53,7 +56,7 @@ export async function POST(request: Request) {
     // Generate path scoped to user ID
     const timestamp = Date.now();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = `${folderId}/${timestamp}_${safeName}`;
+    const filePath = `${user.id}/${timestamp}_${safeName}`;
 
     // Upload to Supabase Storage
     let uploadError: { message: string } | null = null;

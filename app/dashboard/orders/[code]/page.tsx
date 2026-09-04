@@ -20,7 +20,7 @@ export default function OrderDetailPage() {
 
   const fetchOrder = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orders/${encodeURIComponent(code)}`);
+      const res = await fetch(`/api/orders/${code}`);
       const data = await res.json();
       if (data.success) {
         setOrder(data.data);
@@ -40,7 +40,7 @@ export default function OrderDetailPage() {
 
   const handleDownloadReceipt = () => {
     // Open dynamic PDF receipt endpoint directly in new window/tab for instant download
-    window.open(`/api/orders/${encodeURIComponent(code)}/receipt`, '_blank');
+    window.open(`/api/orders/${code}/receipt`, '_blank');
   };
 
   const handleResubmitPayment = async () => {
@@ -67,7 +67,7 @@ export default function OrderDetailPage() {
         return;
       }
 
-      const paymentRes = await fetch(`/api/orders/${encodeURIComponent(code)}/payment`, {
+      const paymentRes = await fetch(`/api/orders/${code}/payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,6 +117,28 @@ export default function OrderDetailPage() {
   const isReady = order.order_status === 'READY_FOR_PICKUP';
   const isCompleted = order.order_status === 'COMPLETED';
   const isRejected = order.payment_status === 'PAYMENT_REJECTED';
+
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancelOrder = async () => {
+    if (!confirm('Are you sure you want to cancel this order?')) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/orders/${code}/cancel`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        fetchOrder();
+      } else {
+        alert(data.error || 'Failed to cancel order');
+      }
+    } catch {
+      alert('Failed to cancel order');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const isCancellable = ['PAYMENT_SUBMITTED', 'ACCEPTED'].includes(order?.order_status || '') || isRejected;
 
   return (
     <div className="animate-fade-in space-y-4">
@@ -234,6 +256,17 @@ export default function OrderDetailPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
           Download Official PDF Receipt
+        </button>
+      )}
+
+      {/* Cancel Order Action Button */}
+      {isCancellable && (
+        <button
+          onClick={handleCancelOrder}
+          disabled={cancelling}
+          className="w-full bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+        >
+          {cancelling ? 'Cancelling Order...' : '✕ Cancel This Order'}
         </button>
       )}
     </div>

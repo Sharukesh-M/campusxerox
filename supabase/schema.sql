@@ -40,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_code TEXT UNIQUE NOT NULL,
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   -- Student contact info
   student_name TEXT NOT NULL DEFAULT 'Student',
@@ -88,9 +88,6 @@ CREATE TABLE IF NOT EXISTS orders (
   -- Receipt
   receipt_path TEXT
 );
-
--- Add new columns / alter constraints if table already exists
-ALTER TABLE orders ALTER COLUMN user_id DROP NOT NULL;
 
 -- Add new columns if table already exists
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS student_name TEXT NOT NULL DEFAULT 'Student';

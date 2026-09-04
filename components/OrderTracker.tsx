@@ -6,7 +6,6 @@ const STATUS_STEPS = [
   { key: 'PAYMENT_SUBMITTED', label: 'Payment Submitted' },
   { key: 'PAYMENT_VERIFIED', label: 'Payment Verified' },
   { key: 'ACCEPTED', label: 'Order Accepted' },
-  { key: 'PRINTING', label: 'Printing' },
   { key: 'READY_FOR_PICKUP', label: 'Ready for Pickup' },
   { key: 'COMPLETED', label: 'Completed' },
 ];
@@ -17,10 +16,9 @@ interface OrderTrackerProps {
 }
 
 function getCompletedStepIndex(orderStatus: string, paymentStatus: string): number {
-  if (orderStatus === 'COMPLETED') return 5;
-  if (orderStatus === 'READY_FOR_PICKUP') return 4;
-  if (orderStatus === 'PRINTING') return 3;
-  if (orderStatus === 'ACCEPTED') return 2;
+  if (orderStatus === 'COMPLETED') return 4;
+  if (orderStatus === 'READY_FOR_PICKUP') return 3;
+  if (orderStatus === 'ACCEPTED' || orderStatus === 'PRINTING') return 2;
   if (paymentStatus === 'PAYMENT_VERIFIED') return 1;
   if (paymentStatus === 'PAYMENT_SUBMITTED' || orderStatus === 'PAYMENT_SUBMITTED') return 0;
   return -1;

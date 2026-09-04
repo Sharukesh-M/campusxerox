@@ -18,6 +18,8 @@ export default function AdminSettingsPage() {
   const [colorPage, setColorPage] = useState('');
   const [softBindingCost, setSoftBindingCost] = useState('');
   const [upiId, setUpiId] = useState('');
+  const [upiQrImagePath, setUpiQrImagePath] = useState<string | null>(null);
+  const [uploadingQr, setUploadingQr] = useState(false);
   const [bankDetails, setBankDetails] = useState('');
   const [retentionDays, setRetentionDays] = useState('');
 
@@ -45,6 +47,7 @@ export default function AdminSettingsPage() {
         setColorPage(String(s.color_per_page));
         setSoftBindingCost(String(s.soft_binding_cost || 20.00));
         setUpiId(s.upi_id || '');
+        setUpiQrImagePath(s.upi_qr_image_path || null);
         setBankDetails(s.bank_details || '');
         setRetentionDays(String(s.file_retention_days));
 
@@ -57,6 +60,36 @@ export default function AdminSettingsPage() {
       setMessage('Failed to load settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingQr(true);
+    setMessage('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload/qr', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success && data.data?.qrImagePath) {
+        setUpiQrImagePath(data.data.qrImagePath);
+        setMessage('QR image uploaded! Click "Save Settings" to apply.');
+      } else {
+        setMessage(data.error || 'Failed to upload QR image');
+      }
+    } catch {
+      setMessage('Error uploading QR image');
+    } finally {
+      setUploadingQr(false);
+      e.target.value = '';
     }
   };
 
@@ -77,6 +110,7 @@ export default function AdminSettingsPage() {
           color_per_page: parseFloat(colorPage),
           soft_binding_cost: parseFloat(softBindingCost),
           upi_id: upiId,
+          upi_qr_image_path: upiQrImagePath,
           bank_details: bankDetails,
           file_retention_days: parseInt(retentionDays),
           shop_open: shopOpen,
@@ -223,6 +257,54 @@ export default function AdminSettingsPage() {
                 placeholder="yourshop@upi"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-surface-300 bg-surface-50 text-surface-900 outline-none text-sm font-mono"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-600 mb-1">Custom UPI QR Photo</label>
+              {upiQrImagePath ? (
+                <div className="space-y-2 bg-surface-50 border border-surface-200 rounded-xl p-3 text-center">
+                  <img
+                    src={upiQrImagePath}
+                    alt="Custom UPI QR Code"
+                    className="w-36 h-36 mx-auto rounded-lg object-contain border border-surface-300 bg-white"
+                  />
+                  <div className="flex gap-2 justify-center">
+                    <label className="bg-primary-50 text-primary-700 hover:bg-primary-100 text-xs px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all">
+                      {uploadingQr ? 'Uploading...' : 'Change Photo'}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                        onChange={handleQrUpload}
+                        disabled={uploadingQr}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setUpiQrImagePath(null)}
+                      className="bg-danger-50 text-danger-600 hover:bg-danger-100 text-xs px-3 py-1.5 rounded-lg font-bold transition-all"
+                    >
+                      Remove Custom QR
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center bg-surface-50 border-2 border-dashed border-surface-300 rounded-xl p-4 cursor-pointer hover:border-primary-400 transition-all">
+                  <svg className="w-6 h-6 text-surface-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-xs font-semibold text-primary-600">
+                    {uploadingQr ? 'Uploading Image...' : '+ Upload Custom QR Photo'}
+                  </span>
+                  <span className="text-[11px] text-surface-400 mt-0.5">Upload a photo of your GPay/Paytm shop QR code</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                    onChange={handleQrUpload}
+                    disabled={uploadingQr}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-surface-600 mb-1">Bank Details (optional)</label>

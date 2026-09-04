@@ -1,48 +1,61 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 
 /**
- * POST /api/orders/[id]/cancel — Cancel an active order by order_code.
- * Accessible by students (matching order code / phone) or admins.
+ * POST /api/orders/[id]/cancel — Cancel an active order.
+ * Accessible by the order's owner (student) or an admin.
  */
 export async function POST(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const adminSupabase = createAdminClient();
-    const { id: rawCode } = await params;
-    const orderCode = rawCode.startsWith('#') ? rawCode : `#${rawCode}`;
+    const supabase = await createClient();
+    const { id: orderCode } = await params;
 
-    const body = await request.json().catch(() => ({}));
-    const { reason = 'Cancelled by user' } = body;
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
-    // Fetch order
-    const { data: order, error } = await adminSupabase
+    // Get order
+    const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('*')
-      .or(`order_code.eq.${orderCode},order_code.eq.${rawCode}`)
-      .maybeSingle();
+      .eq('order_code', orderCode)
+      .single();
 
-    if (error || !order) {
+    if (orderError || !order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
 
-    if (order.order_status === 'COMPLETED' || order.order_status === 'CANCELLED') {
+    // Check permissions (User must own the order or be an admin)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const isAdmin = profile?.role === 'admin';
+    const isOwner = order.user_id === user.id;
+
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Check if order can be cancelled
+    if (['COMPLETED', 'REJECTED', 'CANCELLED'].includes(order.order_status)) {
       return NextResponse.json({
         success: false,
-        error: `Order cannot be cancelled because it is already ${order.order_status.toLowerCase()}`,
+        error: `Cannot cancel order in ${order.order_status} status`,
       }, { status: 400 });
     }
 
-    // Update status to CANCELLED
-    const { data: updatedOrder, error: updateError } = await adminSupabase
+    // Update order status to CANCELLED
+    const { data: updatedOrder, error: updateError } = await supabase
       .from('orders')
-      .update({
-        order_status: 'CANCELLED',
-        rejection_reason: reason,
-      })
-      .eq('id', order.id)
+      .update({ order_status: 'CANCELLED' })
+      .eq('order_code', orderCode)
       .select()
       .single();
 
@@ -50,11 +63,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Failed to cancel order' }, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Order cancelled successfully',
-      data: updatedOrder,
-    });
+    return NextResponse.json({ success: true, data: updatedOrder });
   } catch {
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }

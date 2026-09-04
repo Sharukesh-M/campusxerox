@@ -13,8 +13,11 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const folderId = user?.id || 'guest';
+    // Verify user authentication
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -43,8 +46,7 @@ export async function POST(request: Request) {
 
     // Determine file extension
     const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-    const cleanCode = orderCode.replace('#', '');
-    const filePath = `${folderId}/${cleanCode}.${ext}`;
+    const filePath = `${user.id}/${orderCode}.${ext}`;
 
     // Upload to payment-proofs bucket
     let uploadError: { message: string } | null = null;

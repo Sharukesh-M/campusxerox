@@ -7,29 +7,30 @@
 const ORDER_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 /**
- * Generate a sequential daily order code starting at #101 (e.g. "#101", "#102").
+ * Generate a sequential daily order code like "XR-001", "XR-002".
  * Resets every 24 hours.
  */
 export function generateDailyOrderCode(seqNumber: number): string {
-  const num = 100 + seqNumber;
-  return `#${num}`;
+  return `XR-${String(seqNumber).padStart(3, '0')}`;
 }
 
 export function generateOrderCode(): string {
-  const randomNum = Math.floor(100 + Math.random() * 900);
-  return `#${randomNum}`;
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    const randomIndex = Math.floor(Math.random() * ORDER_CHARS.length);
+    code += ORDER_CHARS[randomIndex];
+  }
+  return `XR-${code}`;
 }
 
 /**
  * Valid order status transitions.
- * Supports simplified 2-step admin workflow:
- * PENDING -> ACCEPTED -> COMPLETED (Done)
- * Plus CANCELLED at any active stage.
+ * Maps current status to allowed next statuses.
  */
 export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
-  PAYMENT_SUBMITTED: ['ACCEPTED', 'COMPLETED', 'CANCELLED', 'REJECTED'],
-  ACCEPTED: ['COMPLETED', 'READY_FOR_PICKUP', 'PRINTING', 'CANCELLED'],
-  PRINTING: ['COMPLETED', 'READY_FOR_PICKUP', 'CANCELLED'],
+  PAYMENT_SUBMITTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
+  ACCEPTED: ['READY_FOR_PICKUP', 'COMPLETED', 'CANCELLED', 'PRINTING'],
+  PRINTING: ['READY_FOR_PICKUP', 'COMPLETED', 'CANCELLED'],
   READY_FOR_PICKUP: ['COMPLETED', 'CANCELLED'],
   COMPLETED: [],
   REJECTED: [],
@@ -61,11 +62,11 @@ export function calculateExpiryDate(retentionDays: number = 7): string {
  * Human-readable order status labels.
  */
 export const ORDER_STATUS_LABELS: Record<string, string> = {
-  PAYMENT_SUBMITTED: 'Pending Acceptance',
-  ACCEPTED: 'Accepted & Printing',
+  PAYMENT_SUBMITTED: 'Payment Submitted',
+  ACCEPTED: 'Order Accepted',
   PRINTING: 'Printing',
   READY_FOR_PICKUP: 'Ready for Pickup',
-  COMPLETED: 'Done (Ready for Pickup)',
+  COMPLETED: 'Completed',
   REJECTED: 'Rejected',
   CANCELLED: 'Cancelled',
 };
@@ -75,4 +76,3 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   PAYMENT_VERIFIED: 'Payment Verified',
   PAYMENT_REJECTED: 'Payment Rejected',
 };
-

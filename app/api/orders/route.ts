@@ -12,10 +12,11 @@ import { ColorMode, Side, BindingType, type PricingSettings, type PdfDocumentCon
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
-    const adminSupabase = createAdminClient();
 
-    // Check optional authenticated user session
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
     const body = await request.json();
     const {
@@ -59,16 +60,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'At least one PDF file is required' }, { status: 400 });
     }
 
-    // Total page count across all files
-    const totalPageCount = processedFiles.reduce((sum, f) => sum + (f.pageCount * f.copies), 0);
+    // Calculate total pages across all uploaded PDFs
+    const totalPageCount = processedFiles.reduce((sum, item) => sum + item.pageCount, 0);
 
-    // Check shop open status
-    const { data: pricing } = await adminSupabase
+    if (totalPageCount < 1) {
+      return NextResponse.json({ success: false, error: 'Invalid total page count' }, { status: 400 });
+    }
+
+    // Validate enum options
+    if (!['BW', 'COLOR', 'CUSTOM_PAGES'].includes(colorMode)) {
+      return NextResponse.json({ success: false, error: 'Invalid color mode' }, { status: 400 });
+    }
+    if (!['SINGLE', 'BOTH'].includes(side)) {
+      return NextResponse.json({ success: false, error: 'Invalid side option' }, { status: 400 });
+    }
+    if (![1, 2].includes(pagesPerSheet)) {
+      return NextResponse.json({ success: false, error: 'Invalid pages per sheet' }, { status: 400 });
+    }
+    if (!copies || copies < 1 || copies > 100) {
+      return NextResponse.json({ success: false, error: 'Invalid copies count' }, { status: 400 });
+    }
+
+    // Fetch current pricing & shop open status
+    const { data: pricing, error: pricingError } = await supabase
       .from('pricing_settings')
       .select('*')
+      .limit(1)
       .single();
 
-    if (pricing && pricing.shop_open === false) {
+    if (pricingError || !pricing) {
+      console.error('Pricing Fetch Error:', pricingError);
+      return NextResponse.json({ success: false, error: 'Failed to fetch pricing settings' }, { status: 500 });
+    }
+
+    // Check shop opening status
+    if (pricing.shop_open === false) {
       return NextResponse.json({
         success: false,
         error: pricing.shop_status_message || 'Shop is currently closed. New uploads are disabled.',
@@ -81,12 +107,14 @@ export async function POST(request: Request) {
       pricing as PricingSettings
     );
 
-    // Generate daily sequential numeric order code starting at #101 (resets daily at midnight)
+    // Generate daily sequential order code starting at XR-001 (resets daily at midnight)
+    // Use admin client to check order_code existence across ALL users (bypassing student RLS read isolation)
+    const adminSupabase = createAdminClient();
     let seqNumber = 1;
-    let orderCode = `#${100 + seqNumber}`;
+    let orderCode = `XR-${String(seqNumber).padStart(3, '0')}`;
 
     let retries = 0;
-    while (retries < 900) {
+    while (retries < 100) {
       const { data: existing } = await adminSupabase
         .from('orders')
         .select('id')
@@ -95,96 +123,58 @@ export async function POST(request: Request) {
 
       if (!existing) break;
       seqNumber++;
-      orderCode = `#${100 + seqNumber}`;
+      orderCode = `XR-${String(seqNumber).padStart(3, '0')}`;
       retries++;
     }
 
-    if (retries >= 900) {
-      orderCode = `#${Math.floor(100 + Math.random() * 900)}`;
+    if (retries >= 100) {
+      // Fallback if 100 consecutive numbers are taken
+      orderCode = `XR-${Date.now().toString(36).toUpperCase().slice(-4)}`;
     }
 
-    // Ensure user profile record exists if user is authenticated
-    if (user) {
-      const { data: existingProfile } = await adminSupabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .maybeSingle();
+    // Ensure user profile record exists
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
 
-      if (!existingProfile) {
-        await adminSupabase.from('profiles').insert({
-          id: user.id,
-          name: studentName.trim(),
-          email: user.email || '',
-          role: 'student',
-        });
-      }
+    if (!existingProfile) {
+      await supabase.from('profiles').insert({
+        id: user.id,
+        name: studentName.trim(),
+        email: user.email || '',
+        role: 'student',
+      });
     }
 
-    // Ensure valid user_id for guest orders (satisfies Supabase foreign key constraint)
-    let effectiveUserId = user?.id || null;
-
-    if (!effectiveUserId) {
-      try {
-        const guestEmail = 'guest@campusxerox.internal';
-        const { data: usersList } = await adminSupabase.auth.admin.listUsers();
-        let guestUser = usersList?.users?.find((u) => u.email === guestEmail);
-
-        if (!guestUser) {
-          const { data: created } = await adminSupabase.auth.admin.createUser({
-            email: guestEmail,
-            email_confirm: true,
-            user_metadata: { name: 'Guest Student' },
-          });
-          guestUser = created.user || undefined;
-        }
-
-        if (guestUser) {
-          effectiveUserId = guestUser.id;
-
-          try {
-            await adminSupabase.from('profiles').upsert({
-              id: guestUser.id,
-              name: 'Guest Student',
-              email: guestEmail,
-              role: 'student',
-            }, { onConflict: 'id' });
-          } catch {}
-        }
-      } catch (err) {
-        console.warn('Guest user auto-provisioning warning:', err);
-      }
-    }
-
-    // Prepare order payload
+    // Create order record
     const mainFile = processedFiles[0];
-    const payload = {
-      order_code: orderCode,
-      user_id: effectiveUserId,
-      student_name: studentName.trim(),
-      phone_number: phoneNumber.trim(),
-      files: processedFiles,
-      file_path: mainFile.filePath,
-      file_name: processedFiles.length === 1 ? mainFile.fileName : `${processedFiles.length} PDF Documents`,
-      page_count: totalPageCount,
-      color_mode: colorMode,
-      custom_color_pages: colorMode === 'CUSTOM_PAGES' ? customColorPages : null,
-      side: side,
-      pages_per_sheet: pagesPerSheet,
-      copies: copies || 1,
-      binding_type: bindingType,
-      binding_cost: priceBreakdown.bindingCost,
-      printing_subtotal: priceBreakdown.printingSubtotal,
-      total_amount: priceBreakdown.totalAmount,
-      price_snapshot: pricing,
-      payment_status: 'PAYMENT_SUBMITTED',
-      order_status: 'PAYMENT_SUBMITTED',
-      expires_at: calculateExpiryDate(pricing.file_retention_days),
-    };
-
-    let { data: order, error: orderError } = await adminSupabase
+    const { data: order, error: orderError } = await supabase
       .from('orders')
-      .insert(payload)
+      .insert({
+        order_code: orderCode,
+        user_id: user.id,
+        student_name: studentName.trim(),
+        phone_number: phoneNumber.trim(),
+        files: processedFiles,
+        file_path: mainFile.filePath,
+        file_name: processedFiles.length === 1 ? mainFile.fileName : `${processedFiles.length} PDF Documents`,
+        page_count: totalPageCount,
+        color_mode: colorMode,
+        custom_color_pages: colorMode === 'CUSTOM_PAGES' ? customColorPages : null,
+        side: side,
+        pages_per_sheet: pagesPerSheet,
+        copies: copies || 1,
+        binding_type: bindingType,
+        binding_cost: priceBreakdown.bindingCost,
+        printing_subtotal: priceBreakdown.printingSubtotal,
+        total_amount: priceBreakdown.totalAmount,
+        price_snapshot: pricing,
+        payment_status: 'PAYMENT_SUBMITTED',
+        order_status: 'PAYMENT_SUBMITTED',
+        expires_at: calculateExpiryDate(pricing.file_retention_days),
+      })
       .select()
       .single();
 
