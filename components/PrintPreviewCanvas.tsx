@@ -32,41 +32,94 @@ export default function PrintPreviewCanvas({
     return false;
   };
 
+  const [bgTheme, setBgTheme] = useState<'blueprint' | 'cyber' | 'warm' | 'slate'>('blueprint');
+
+  const THEMES: Record<string, { bg: string; grid: string; glow: string; label: string }> = {
+    blueprint: {
+      bg: 'bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950 border-blue-800/40',
+      grid: 'bg-[linear-gradient(to_right,#3b82f61a_1px,transparent_1px),linear-gradient(to_bottom,#3b82f61a_1px,transparent_1px)] [background-size:20px_20px]',
+      glow: 'bg-blue-500/10',
+      label: '📐 Blueprint',
+    },
+    cyber: {
+      bg: 'bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-950 border-purple-700/40',
+      grid: 'bg-[radial-gradient(#a855f7_1px,transparent_1px)] [background-size:18px_18px] opacity-20',
+      glow: 'bg-purple-500/15',
+      label: '✨ Cyber',
+    },
+    warm: {
+      bg: 'bg-gradient-to-br from-amber-950 via-stone-900 to-zinc-950 border-amber-800/40',
+      grid: 'bg-[radial-gradient(#f59e0b_1px,transparent_1px)] [background-size:24px_24px] opacity-15',
+      glow: 'bg-amber-500/10',
+      label: '🪵 Studio',
+    },
+    slate: {
+      bg: 'bg-gradient-to-br from-slate-900 via-zinc-900 to-slate-950 border-slate-700/50',
+      grid: 'bg-[radial-gradient(#64748b_1px,transparent_1px)] [background-size:16px_16px] opacity-15',
+      glow: 'bg-slate-500/10',
+      label: '⬛ Slate',
+    },
+  };
+
+  const activeTheme = THEMES[bgTheme] || THEMES.blueprint;
+
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-surface-900 via-surface-800 to-surface-950 rounded-2xl p-5 text-white shadow-2xl border border-surface-700/50">
+    <div className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-2xl border transition-all duration-500 ${activeTheme.bg}`}>
       {/* Background UI Grid texture accent */}
-      <div className="absolute inset-0 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] opacity-10 pointer-events-none" />
+      <div className={`absolute inset-0 pointer-events-none ${activeTheme.grid}`} />
+      <div className={`absolute -top-24 -left-24 w-64 h-64 rounded-full blur-3xl pointer-events-none ${activeTheme.glow}`} />
+      <div className={`absolute -bottom-24 -right-24 w-64 h-64 rounded-full blur-3xl pointer-events-none ${activeTheme.glow}`} />
 
       {/* Header bar */}
-      <div className="relative z-10 flex items-center justify-between mb-4 pb-3 border-b border-surface-700/50">
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-primary-500/20 flex items-center justify-center border border-primary-500/40">
-            <svg className="w-3.5 h-3.5 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center border border-white/20">
+            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </div>
-          <span className="text-xs font-bold text-surface-200 uppercase tracking-wider">
+          <span className="text-xs font-bold text-surface-100 uppercase tracking-wider">
             Live Print Spec Preview
           </span>
         </div>
 
-        {/* Both sides flip button */}
-        {isBothSides ? (
-          <button
-            onClick={() => setViewSide(viewSide === 'FRONT' ? 'BACK' : 'FRONT')}
-            className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white text-xs px-3 py-1.5 rounded-xl transition-all font-semibold shadow-lg shadow-primary-600/30 active:scale-95"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Flip to {viewSide === 'FRONT' ? 'Back Side' : 'Front Side'}
-          </button>
-        ) : (
-          <span className="text-[11px] font-medium bg-surface-800 text-surface-300 border border-surface-700 px-2.5 py-1 rounded-full">
-            Single Side
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Background theme selector */}
+          <div className="flex bg-black/30 p-0.5 rounded-lg border border-white/10 text-[10px]">
+            {Object.entries(THEMES).map(([key, t]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setBgTheme(key as any)}
+                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  bgTheme === key
+                    ? 'bg-white text-surface-900 shadow-xs'
+                    : 'text-surface-300 hover:text-white'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Both sides flip button */}
+          {isBothSides ? (
+            <button
+              onClick={() => setViewSide(viewSide === 'FRONT' ? 'BACK' : 'FRONT')}
+              className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-500 text-white text-xs px-3 py-1 rounded-xl transition-all font-semibold shadow-lg shadow-primary-600/30 active:scale-95"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Flip to {viewSide === 'FRONT' ? 'Back' : 'Front'}
+            </button>
+          ) : (
+            <span className="text-[11px] font-medium bg-white/10 text-surface-200 border border-white/10 px-2.5 py-0.5 rounded-full">
+              Single Side
+            </span>
+          )}
+        </div>
       </div>
 
       {/* PAPER CANVAS CONTAINER */}
