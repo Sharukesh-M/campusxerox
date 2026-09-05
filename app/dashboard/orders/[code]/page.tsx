@@ -119,13 +119,23 @@ export default function OrderDetailPage() {
   const isCompleted = order.order_status === 'COMPLETED';
   const isRejected = order.payment_status === 'PAYMENT_REJECTED';
 
-  const handleCancelOrder = async () => {
-    if (!confirm('Are you sure you want to cancel this order?')) return;
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Uploaded wrong file / document');
+  const [customReason, setCustomReason] = useState('');
+
+  const confirmAndExecuteCancel = async () => {
     setCancelling(true);
+    const finalReason = cancelReason === 'Other' ? customReason.trim() || 'Cancelled by student' : cancelReason;
+
     try {
-      const res = await fetch(`/api/orders/${code}/cancel`, { method: 'POST' });
+      const res = await fetch(`/api/orders/${code}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: finalReason }),
+      });
       const data = await res.json();
       if (data.success) {
+        setShowCancelModal(false);
         fetchOrder();
       } else {
         alert(data.error || 'Failed to cancel order');
@@ -147,7 +157,7 @@ export default function OrderDetailPage() {
           <button onClick={() => router.push('/dashboard/orders')} className="text-xs text-primary-600 font-medium mb-1 hover:text-primary-700">
             ← My Orders
           </button>
-          <h1 className="text-xl font-bold text-surface-900">#{order.order_code}</h1>
+          <h1 className="text-xl font-bold text-surface-900 dark:text-white">#{order.order_code}</h1>
         </div>
         <span className="text-sm text-surface-400">
           {new Date(order.created_at).toLocaleDateString('en-IN', {
@@ -170,17 +180,17 @@ export default function OrderDetailPage() {
       )}
 
       {/* Status Tracker */}
-      <div className="bg-white border border-surface-200 rounded-2xl p-4">
+      <div className="bg-white dark:bg-slate-900 border border-surface-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
         <OrderTracker orderStatus={order.order_status} paymentStatus={order.payment_status} />
       </div>
 
       {/* Rejection reason + Resubmit */}
       {isRejected && (
-        <div className="bg-danger-50 border border-danger-500/20 rounded-2xl p-4 space-y-3">
+        <div className="bg-danger-50 dark:bg-danger-950/50 border border-danger-500/20 rounded-2xl p-4 space-y-3">
           <div>
-            <p className="text-sm font-semibold text-danger-600">Payment Rejected</p>
+            <p className="text-sm font-semibold text-danger-600 dark:text-danger-400">Payment Rejected</p>
             {order.rejection_reason && (
-              <p className="text-sm text-danger-500 mt-1">Reason: {order.rejection_reason}</p>
+              <p className="text-sm text-danger-500 dark:text-danger-300 mt-1">Reason: {order.rejection_reason}</p>
             )}
           </div>
 
@@ -192,28 +202,28 @@ export default function OrderDetailPage() {
               Resubmit Payment Proof
             </button>
           ) : (
-            <div className="space-y-3 bg-white rounded-xl p-3">
+            <div className="space-y-3 bg-white dark:bg-slate-900 rounded-xl p-3 border border-surface-200 dark:border-slate-800">
               {resubError && (
                 <p className="text-xs text-danger-600">{resubError}</p>
               )}
               <div>
-                <label className="text-xs font-medium text-surface-600 mb-1 block">New Screenshot</label>
+                <label className="text-xs font-medium text-surface-600 dark:text-slate-400 mb-1 block">New Screenshot</label>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)}
-                  className="text-xs"
+                  className="text-xs text-surface-700 dark:text-slate-300"
                 />
               </div>
               <div>
-                <label htmlFor="resub-utr" className="text-xs font-medium text-surface-600 mb-1 block">UTR Number</label>
+                <label htmlFor="resub-utr" className="text-xs font-medium text-surface-600 dark:text-slate-400 mb-1 block">UTR Number</label>
                 <input
                   id="resub-utr"
                   type="text"
                   value={utrNumber}
                   onChange={(e) => setUtrNumber(e.target.value)}
                   placeholder="Enter UTR"
-                  className="w-full px-3 py-2 rounded-lg border border-surface-300 text-sm outline-none focus:border-primary-500"
+                  className="w-full px-3 py-2 rounded-lg border border-surface-300 dark:border-slate-700 bg-transparent text-surface-900 dark:text-white text-sm outline-none focus:border-primary-500"
                 />
               </div>
               <button
@@ -229,8 +239,8 @@ export default function OrderDetailPage() {
       )}
 
       {/* Order Details */}
-      <div className="bg-white border border-surface-200 rounded-2xl p-4 space-y-2">
-        <h3 className="font-semibold text-sm text-surface-700 mb-2">Print Configuration</h3>
+      <div className="bg-white dark:bg-slate-900 border border-surface-200 dark:border-slate-800 rounded-2xl p-4 space-y-2 shadow-sm">
+        <h3 className="font-semibold text-sm text-surface-700 dark:text-slate-300 mb-2">Print Configuration</h3>
         <Detail label="File" value={order.file_name || 'Document'} />
         <Detail label="Pages" value={`${order.page_count} PDF pages`} />
         <Detail label="Color" value={order.color_mode === 'BW' ? 'Black & White' : order.color_mode === 'COLOR' ? 'Color' : `Specific (${order.custom_color_pages})`} />
@@ -238,10 +248,10 @@ export default function OrderDetailPage() {
         <Detail label="Layout" value={`${order.pages_per_sheet} page(s) per sheet`} />
         <Detail label="Binding" value={order.binding_type === 'SOFT' ? 'Soft Binding (+₹20)' : 'No Binding'} />
         <Detail label="Copies" value={`${order.copies}`} />
-        <hr className="border-surface-100" />
+        <hr className="border-surface-100 dark:border-slate-800" />
         <div className="flex justify-between pt-1">
-          <span className="font-bold text-sm text-surface-900">Total</span>
-          <span className="font-bold text-sm text-primary-600">₹{Number(order.total_amount).toFixed(2)}</span>
+          <span className="font-bold text-sm text-surface-900 dark:text-white">Total</span>
+          <span className="font-bold text-sm text-primary-600 dark:text-primary-400">₹{Number(order.total_amount).toFixed(2)}</span>
         </div>
       </div>
 
@@ -249,7 +259,7 @@ export default function OrderDetailPage() {
       {isCompleted && (
         <button
           onClick={handleDownloadReceipt}
-          className="w-full bg-primary-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-700 active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm"
+          className="w-full bg-emerald-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-emerald-700 active:scale-[0.98] flex items-center justify-center gap-2 shadow-sm"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -261,12 +271,90 @@ export default function OrderDetailPage() {
       {/* Cancel Order Action Button */}
       {isCancellable && (
         <button
-          onClick={handleCancelOrder}
+          onClick={() => setShowCancelModal(true)}
           disabled={cancelling}
-          className="w-full bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
+          className="w-full bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-900 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
         >
           {cancelling ? 'Cancelling Order...' : '✕ Cancel This Order'}
         </button>
+      )}
+
+      {/* Custom Cancel Order Confirmation Modal UI */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-surface-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 animate-scale-up">
+            {/* Warning Icon Header */}
+            <div className="w-14 h-14 bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+
+            <div className="text-center space-y-2.5">
+              <h3 className="text-xl font-black text-surface-900 dark:text-white tracking-tight">
+                Cancel Order Confirmation
+              </h3>
+              <div className="bg-rose-50 dark:bg-rose-950/60 p-3 rounded-2xl border border-rose-200 dark:border-rose-900/60">
+                <p className="text-sm font-extrabold text-rose-700 dark:text-rose-300">
+                  Are you sure you want to cancel order #{order.order_code}?
+                </p>
+              </div>
+            </div>
+
+            {/* Reason Selection Form */}
+            <div className="space-y-2 text-left">
+              <label className="text-xs font-bold text-surface-700 dark:text-slate-300 uppercase tracking-wider block">
+                Reason for Cancellation <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-surface-300 dark:border-slate-700 bg-surface-50 dark:bg-slate-800 text-surface-900 dark:text-white text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-500/20"
+              >
+                <option value="Uploaded wrong file / document">Uploaded wrong file / document</option>
+                <option value="Incorrect print configuration (color/copies/sides)">Incorrect print configuration (color/copies/sides)</option>
+                <option value="Placed order by mistake">Placed order by mistake</option>
+                <option value="Changed my mind">Changed my mind</option>
+                <option value="Other">Other reason...</option>
+              </select>
+
+              {cancelReason === 'Other' && (
+                <input
+                  type="text"
+                  value={customReason}
+                  onChange={(e) => setCustomReason(e.target.value)}
+                  placeholder="Enter custom cancellation reason..."
+                  required
+                  className="w-full px-3.5 py-2 rounded-xl border border-surface-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-surface-900 dark:text-white text-xs outline-none focus:border-rose-500 mt-2"
+                />
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                disabled={cancelling}
+                className="w-full bg-surface-100 hover:bg-surface-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-surface-700 dark:text-slate-200 font-extrabold py-3 px-4 rounded-xl text-xs transition-all active:scale-95 disabled:opacity-50"
+              >
+                No, Keep Order
+              </button>
+              <button
+                type="button"
+                onClick={confirmAndExecuteCancel}
+                disabled={cancelling}
+                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-3 px-4 rounded-xl text-xs shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {cancelling ? (
+                  <span>Cancelling...</span>
+                ) : (
+                  <span>Yes, Cancel Order</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

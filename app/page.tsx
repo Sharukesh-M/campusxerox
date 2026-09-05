@@ -6,21 +6,31 @@ export default function HomePage() {
       {/* Background ambient lighting glows */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-primary-500/20 via-purple-500/15 to-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Hero */}
-      <header className="flex-1 flex flex-col items-center justify-center px-4 py-20 text-center relative z-10">
-        {/* Badge */}
-        <div className="mb-6 animate-fade-in">
-          <span className="inline-flex items-center gap-2 bg-primary-50 dark:bg-indigo-950/80 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-indigo-800 px-4 py-1.5 rounded-full text-xs font-bold shadow-xs">
-            ⚡ Fast, Queue-Free Campus Xerox
-          </span>
+      {/* Header Bar */}
+      <nav className="max-w-5xl w-full mx-auto px-4 h-16 flex items-center justify-between relative z-20">
+        <div className="flex items-center gap-2 font-black text-xl text-primary-600 dark:text-primary-400">
+          <div className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 flex items-center justify-center shadow-xs">
+            <span className="font-extrabold text-xs tracking-wider text-white font-mono uppercase">XEROX®</span>
+          </div>
+          <span>Campus<span className="text-surface-900 dark:text-white">Xerox</span></span>
         </div>
+        <div className="flex items-center gap-3">
+          <a
+            href="tel:8015587361"
+            className="text-xs font-extrabold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-3.5 py-1.5 rounded-xl transition-all hover:bg-amber-100 flex items-center gap-1.5 shadow-sm"
+          >
+            <span>Contact: Surya</span>
+            <span className="font-mono underline">8015587361</span>
+          </a>
+        </div>
+      </nav>
 
+      {/* Hero Section */}
+      <header className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center relative z-10">
         {/* Logo & Headline */}
         <div className="mb-8 animate-fade-in max-w-2xl">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-primary-600 to-indigo-500 text-white rounded-3xl mb-6 shadow-xl glow-primary transform hover:scale-105 transition-all duration-300">
-            <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
+          <div className="inline-flex items-center justify-center px-6 py-3 bg-slate-950 text-white rounded-2xl mb-6 shadow-xl border border-slate-800 transform hover:scale-105 transition-all duration-300">
+            <span className="font-extrabold text-2xl tracking-widest font-mono text-white">XEROX®</span>
           </div>
           <h1 className="text-4xl sm:text-6xl font-black text-surface-900 dark:text-white tracking-tight">
             Campus<span className="gradient-text">Xerox</span>
@@ -30,25 +40,31 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* CTA */}
-        <div className="animate-slide-up">
+        {/* CTA Buttons */}
+        <div className="flex flex-col sm:flex-row items-center gap-4 animate-slide-up">
           <Link
-            href="/login"
+            href="/dashboard/new-order"
             className="inline-flex items-center gap-2.5 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-500 hover:to-indigo-500 text-white px-9 py-4 rounded-2xl font-bold text-lg hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] shadow-xl glow-primary transition-all duration-200"
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            Order Xerox Now
+            Order Xerox Now →
+          </Link>
+          <Link
+            href="/track"
+            className="inline-flex items-center gap-2 bg-white dark:bg-slate-900 text-surface-800 dark:text-slate-200 border-2 border-surface-200 dark:border-slate-800 hover:border-primary-400 px-7 py-4 rounded-2xl font-bold text-base hover:shadow-lg transition-all"
+          >
+            Track Order
           </Link>
         </div>
 
         {/* 3 Steps */}
-        <div className="mt-20 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl w-full animate-slide-up">
+        <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl w-full animate-slide-up">
           <StepCard
             number={1}
-            title="Upload PDF"
-            description="Upload your assignments, lecture notes, or project reports"
+            title="Order & Pricing"
+            description="Enter Name, Email & Phone, upload PDF, view live rates instantly"
             icon={
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             }
@@ -63,8 +79,8 @@ export default function HomePage() {
           />
           <StepCard
             number={3}
-            title="Collect"
-            description="Get notified live & pick up prints at Xerox counter"
+            title="Track & Collect"
+            description="Track with Phone/Order Code & pick up prints at Xerox counter"
             icon={
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             }
@@ -73,8 +89,11 @@ export default function HomePage() {
       </header>
 
       {/* Footer */}
-      <footer className="py-8 text-center text-xs font-medium text-surface-500 dark:text-slate-400 border-t border-surface-200/60 dark:border-slate-800">
-        <p>CampusXerox — Skip the counter queue, save your time.</p>
+      <footer className="py-8 text-center text-xs font-medium text-surface-500 dark:text-slate-400 border-t border-surface-200/60 dark:border-slate-800 space-y-1">
+        <p className="font-bold text-surface-700 dark:text-slate-200">
+          CampusXerox — Contact Person: <strong className="text-primary-600 dark:text-primary-400">Surya</strong> · <a href="tel:8015587361" className="underline font-mono">8015587361</a>
+        </p>
+        <p>Skip the counter queue, save your time.</p>
       </footer>
     </div>
   );

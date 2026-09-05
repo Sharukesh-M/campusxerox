@@ -181,7 +181,7 @@ export default function AdminSettingsPage() {
                   : 'bg-danger-600 text-white shadow-md shadow-danger-600/20'
               }`}
             >
-              {shopOpen ? '🟢 OPEN' : '🔴 CLOSED'}
+              {shopOpen ? 'OPEN' : 'CLOSED'}
             </button>
           </div>
 
@@ -223,7 +223,7 @@ export default function AdminSettingsPage() {
               onClick={handleShareShopOpened}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2"
             >
-              <span>💬 Share "Shop Open" Announcement via WhatsApp</span>
+              <span>Share "Shop Open" Announcement via WhatsApp</span>
             </button>
           )}
         </div>

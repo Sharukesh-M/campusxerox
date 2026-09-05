@@ -12,10 +12,15 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
  */
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // Fallback to ANON key if SERVICE_ROLE_KEY is missing or invalid format (e.g., sb_secret_)
+  if (!key || key.startsWith('sb_secret_') || !key.startsWith('eyJ')) {
+    key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  }
 
   if (!url || !key) {
-    throw new Error('Missing SUPABASE_URL or SERVICE_ROLE_KEY environment variables');
+    throw new Error('Missing SUPABASE_URL or API Key environment variables');
   }
 
   return createSupabaseClient(url, key, {

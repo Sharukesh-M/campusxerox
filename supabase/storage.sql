@@ -22,101 +22,72 @@ ON CONFLICT (id) DO NOTHING;
 -- ---- XEROX-FILES ----
 
 DROP POLICY IF EXISTS "Students can upload own PDFs" ON storage.objects;
-CREATE POLICY "Students can upload own PDFs"
+DROP POLICY IF EXISTS "Anyone can upload xerox files" ON storage.objects;
+CREATE POLICY "Anyone can upload xerox files"
   ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    bucket_id = 'xerox-files'
-    AND (split_part(name, '/', 1) = auth.uid()::text)
-  );
+  WITH CHECK (bucket_id = 'xerox-files');
 
 DROP POLICY IF EXISTS "Students can read own PDFs" ON storage.objects;
-CREATE POLICY "Students can read own PDFs"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'xerox-files'
-    AND (split_part(name, '/', 1) = auth.uid()::text)
-  );
-
 DROP POLICY IF EXISTS "Admins can read all PDFs" ON storage.objects;
-CREATE POLICY "Admins can read all PDFs"
+DROP POLICY IF EXISTS "Anyone can read xerox files" ON storage.objects;
+CREATE POLICY "Anyone can read xerox files"
   ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'xerox-files'
-    AND public.is_admin()
-  );
+  USING (bucket_id = 'xerox-files');
 
 DROP POLICY IF EXISTS "Service can delete PDFs" ON storage.objects;
 CREATE POLICY "Service can delete PDFs"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'xerox-files');
 
+DROP POLICY IF EXISTS "Anyone can manage xerox files" ON storage.objects;
+CREATE POLICY "Anyone can manage xerox files"
+  ON storage.objects FOR ALL
+  USING (bucket_id = 'xerox-files')
+  WITH CHECK (bucket_id = 'xerox-files');
+
 -- ---- PAYMENT-PROOFS ----
 
 DROP POLICY IF EXISTS "Students can upload own screenshots" ON storage.objects;
-CREATE POLICY "Students can upload own screenshots"
+DROP POLICY IF EXISTS "Anyone can upload payment proofs" ON storage.objects;
+CREATE POLICY "Anyone can upload payment proofs"
   ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    bucket_id = 'payment-proofs'
-    AND (split_part(name, '/', 1) = auth.uid()::text)
-  );
+  WITH CHECK (bucket_id = 'payment-proofs');
 
 DROP POLICY IF EXISTS "Students can read own screenshots" ON storage.objects;
-CREATE POLICY "Students can read own screenshots"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'payment-proofs'
-    AND (split_part(name, '/', 1) = auth.uid()::text)
-  );
-
 DROP POLICY IF EXISTS "Admins can read all screenshots" ON storage.objects;
-CREATE POLICY "Admins can read all screenshots"
+DROP POLICY IF EXISTS "Anyone can read payment proofs" ON storage.objects;
+CREATE POLICY "Anyone can read payment proofs"
   ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'payment-proofs'
-    AND public.is_admin()
-  );
+  USING (bucket_id = 'payment-proofs');
 
 DROP POLICY IF EXISTS "Service can delete screenshots" ON storage.objects;
 CREATE POLICY "Service can delete screenshots"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'payment-proofs');
 
+DROP POLICY IF EXISTS "Anyone can manage payment proofs" ON storage.objects;
+CREATE POLICY "Anyone can manage payment proofs"
+  ON storage.objects FOR ALL
+  USING (bucket_id = 'payment-proofs')
+  WITH CHECK (bucket_id = 'payment-proofs');
+
 -- ---- RECEIPTS ----
 
 DROP POLICY IF EXISTS "Students can read own receipts" ON storage.objects;
-CREATE POLICY "Students can read own receipts"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'receipts'
-    AND (split_part(name, '/', 1) = auth.uid()::text)
-  );
-
 DROP POLICY IF EXISTS "Admins can read all receipts" ON storage.objects;
-CREATE POLICY "Admins can read all receipts"
+DROP POLICY IF EXISTS "Anyone can read receipts" ON storage.objects;
+CREATE POLICY "Anyone can read receipts"
   ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'receipts'
-    AND public.is_admin()
-  );
+  USING (bucket_id = 'receipts');
 
 DROP POLICY IF EXISTS "Admins can upload receipts" ON storage.objects;
-CREATE POLICY "Admins can upload receipts"
+DROP POLICY IF EXISTS "Anyone can upload receipts" ON storage.objects;
+CREATE POLICY "Anyone can upload receipts"
   ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    bucket_id = 'receipts'
-    AND public.is_admin()
-  );
+  WITH CHECK (bucket_id = 'receipts');
 
 DROP POLICY IF EXISTS "Service can manage receipts" ON storage.objects;
 CREATE POLICY "Service can manage receipts"
   ON storage.objects FOR ALL
-  USING (bucket_id = 'receipts');
+  USING (bucket_id = 'receipts')
+  WITH CHECK (bucket_id = 'receipts');

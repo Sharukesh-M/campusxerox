@@ -38,7 +38,16 @@ export default function AdminOrderDetailPage() {
   }, [fetchOrder]);
 
   useEffect(() => {
+    if (order?.payment_screenshot_url) {
+      setScreenshotUrl(order.payment_screenshot_url);
+      return;
+    }
+
     if (!order?.payment_screenshot_path) return;
+    if (order.payment_screenshot_url) {
+      setScreenshotUrl(order.payment_screenshot_url);
+      return;
+    }
 
     const getScreenshotUrl = async () => {
       try {
@@ -54,7 +63,7 @@ export default function AdminOrderDetailPage() {
       }
     };
     getScreenshotUrl();
-  }, [order?.payment_screenshot_path]);
+  }, [order?.payment_screenshot_path, order?.payment_screenshot_url]);
 
   const handlePaymentAction = async (action: 'verify' | 'reject') => {
     if (action === 'reject' && !rejectReason.trim()) {
@@ -101,20 +110,11 @@ export default function AdminOrderDetailPage() {
     }
   };
 
-  const handleDownloadPdf = async (filePath?: string | null) => {
+  const handleDownloadPdf = (filePath?: string | null) => {
     const path = filePath || order?.file_path;
     if (!path) return;
-    try {
-      const supabase = createClient();
-      const { data } = await supabase.storage
-        .from('xerox-files')
-        .createSignedUrl(path, 3600);
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      }
-    } catch {
-      // Handle
-    }
+    const downloadUrl = `/api/files/download?path=${encodeURIComponent(path)}`;
+    window.open(downloadUrl, '_blank');
   };
 
   const handleWhatsAppReceipt = () => {
@@ -172,7 +172,7 @@ export default function AdminOrderDetailPage() {
           </button>
           <h1 className="text-xl font-bold text-surface-900">Order #{order.order_code}</h1>
           <p className="text-sm font-semibold text-surface-700 mt-0.5">
-            👤 {order.student_name || 'Student'} · 📞 {order.phone_number || 'No Phone'}
+            {order.student_name || 'Student'} · Contact: {order.phone_number || 'No Phone'}
           </p>
         </div>
         <span className="text-xs text-surface-400">
@@ -184,10 +184,10 @@ export default function AdminOrderDetailPage() {
       <div className="bg-white border-2 border-primary-200 rounded-2xl p-5 space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold text-primary-600 uppercase tracking-wide">
-            🖨 Print Specification
+            Print Specification
           </h2>
           <span className="text-xs font-bold bg-primary-50 text-primary-700 px-2.5 py-1 rounded-full">
-            {order.binding_type === 'SOFT' ? '📕 Soft Binding (+₹20)' : 'No Binding'}
+            {order.binding_type === 'SOFT' ? 'Soft Binding (+₹20)' : 'No Binding'}
           </span>
         </div>
 
@@ -227,7 +227,7 @@ export default function AdminOrderDetailPage() {
             filesList.map((f, idx) => (
               <div key={idx} className="bg-surface-50 border border-surface-200 rounded-xl p-3.5 space-y-2">
                 <div className="flex justify-between items-center font-bold text-xs text-surface-900">
-                  <span className="truncate max-w-[220px]">📄 #{idx + 1} {f.fileName}</span>
+                  <span className="truncate max-w-[220px]">#{idx + 1} {f.fileName}</span>
                   <span className="text-primary-700 font-mono">{f.pageCount} pages</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5 text-xs text-surface-700">
@@ -278,7 +278,7 @@ export default function AdminOrderDetailPage() {
       {/* PAYMENT PROOF VIEWER */}
       <div className="bg-white border border-surface-200 rounded-2xl p-5">
         <h2 className="text-xs font-bold text-surface-500 uppercase tracking-wide mb-3">
-          💳 Payment Verification
+          Payment Verification
         </h2>
 
         {screenshotUrl ? (
@@ -296,6 +296,16 @@ export default function AdminOrderDetailPage() {
         )}
 
         <div className="space-y-2 text-sm">
+          <div className="flex justify-between items-center">
+            <span className="text-surface-500 font-medium">Payment Mode</span>
+            <span className={`font-extrabold text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 ${
+              order.utr_number === 'HAND_CASH'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300'
+            }`}>
+              {order.utr_number === 'HAND_CASH' ? 'Hand Cash (Pay on Pickup)' : 'UPI / Online Payment'}
+            </span>
+          </div>
           <div className="flex justify-between">
             <span className="text-surface-500">Entered UTR</span>
             <span className="font-mono font-semibold text-surface-900">{order.utr_number || 'N/A'}</span>
@@ -344,13 +354,13 @@ export default function AdminOrderDetailPage() {
                   disabled={!!actionLoading}
                   className="flex-1 bg-success-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-success-500 disabled:opacity-50 active:scale-[0.98]"
                 >
-                  {actionLoading === 'verify' ? 'Verifying...' : '✓ Verify Payment'}
+                  {actionLoading === 'verify' ? 'Verifying...' : 'Verify Payment'}
                 </button>
                 <button
                   onClick={() => setShowRejectForm(true)}
                   className="flex-1 bg-danger-50 text-danger-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-danger-100 border border-danger-200"
                 >
-                  ✗ Reject
+                  Reject
                 </button>
               </div>
             )}
@@ -361,7 +371,7 @@ export default function AdminOrderDetailPage() {
       {/* ORDER WORKFLOW & WHATSAPP NOTIFICATIONS */}
       <div className="bg-white border border-surface-200 rounded-2xl p-5 space-y-3">
         <h2 className="text-xs font-bold text-surface-500 uppercase tracking-wide">
-          📦 Order Actions & Notifications
+          Order Actions & Notifications
         </h2>
 
         <div className="flex gap-2">
@@ -370,7 +380,7 @@ export default function AdminOrderDetailPage() {
               onClick={handleWhatsAppReady}
               className="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
             >
-              <span>💬 WhatsApp: "Ready for Pickup"</span>
+              <span>WhatsApp: "Ready for Pickup"</span>
             </button>
           )}
           {order.order_status === 'COMPLETED' && order.phone_number && (
@@ -378,33 +388,15 @@ export default function AdminOrderDetailPage() {
               onClick={handleWhatsAppReceipt}
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
             >
-              <span>💬 Send Receipt via WhatsApp</span>
+              <span>Send Receipt via WhatsApp</span>
             </button>
           )}
         </div>
 
         <div className="space-y-2 pt-2">
-          {(order.order_status === 'ACCEPTED' || order.order_status === 'PRINTING') && (
-            <div className="space-y-2">
-              <ActionButton
-                label="Mark Ready for Pickup"
-                status="READY_FOR_PICKUP"
-                color="success"
-                loading={actionLoading}
-                onClick={() => handleStatusChange('READY_FOR_PICKUP')}
-              />
-              <ActionButton
-                label="Mark Completed"
-                status="COMPLETED"
-                color="primary"
-                loading={actionLoading}
-                onClick={() => handleStatusChange('COMPLETED')}
-              />
-            </div>
-          )}
-          {order.order_status === 'READY_FOR_PICKUP' && (
+          {['ACCEPTED', 'PRINTING', 'PAYMENT_VERIFIED'].includes(order.order_status) && (
             <ActionButton
-              label="Mark Completed"
+              label="Mark Completed & Send Receipt Email"
               status="COMPLETED"
               color="primary"
               loading={actionLoading}
@@ -412,8 +404,8 @@ export default function AdminOrderDetailPage() {
             />
           )}
           {order.order_status === 'COMPLETED' && (
-            <p className="text-sm text-success-600 font-medium text-center py-1">
-              ✓ Order completed & receipt ready
+            <p className="text-sm text-emerald-600 dark:text-emerald-400 font-bold text-center py-1 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl border border-emerald-200 dark:border-emerald-800">
+              ✓ Order completed & digital receipt emailed to student
             </p>
           )}
         </div>

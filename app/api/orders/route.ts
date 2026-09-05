@@ -1,26 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { generateOrderCode, calculateExpiryDate } from '@/services/orders';
-import { calculatePrintPrice, calculateMultiPdfOrderPrice } from '@/services/pricing';
+import { calculateExpiryDate } from '@/services/orders';
+import { calculateMultiPdfOrderPrice } from '@/services/pricing';
 import { ColorMode, Side, BindingType, type PricingSettings, type PdfDocumentConfig } from '@/types';
+import { cookies } from 'next/headers';
+import { sendAdminNtfyNotification } from '@/services/notifications';
 
 /**
- * POST /api/orders — Create a new order.
- * Verifies shop open status, recalculates price & binding cost server-side, snapshots current prices.
+ * POST /api/orders — Create a new guest xerox order.
+ * Accepts studentName, email, phoneNumber, files, etc.
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const adminSupabase = createAdminClient();
     const body = await request.json();
+
     const {
       studentName,
+      email = '',
       phoneNumber,
       files,
       filePath,
@@ -32,6 +29,9 @@ export async function POST(request: Request) {
       pagesPerSheet,
       copies,
       bindingType = BindingType.NONE,
+      paymentMethod = 'UPI',
+      utrNumber = null,
+      screenshotPath = null,
     } = body;
 
     // Validate student details
@@ -68,21 +68,12 @@ export async function POST(request: Request) {
     }
 
     // Validate enum options
-    if (!['BW', 'COLOR', 'CUSTOM_PAGES'].includes(colorMode)) {
+    if (colorMode && !['BW', 'COLOR', 'CUSTOM_PAGES'].includes(colorMode)) {
       return NextResponse.json({ success: false, error: 'Invalid color mode' }, { status: 400 });
-    }
-    if (!['SINGLE', 'BOTH'].includes(side)) {
-      return NextResponse.json({ success: false, error: 'Invalid side option' }, { status: 400 });
-    }
-    if (![1, 2].includes(pagesPerSheet)) {
-      return NextResponse.json({ success: false, error: 'Invalid pages per sheet' }, { status: 400 });
-    }
-    if (!copies || copies < 1 || copies > 100) {
-      return NextResponse.json({ success: false, error: 'Invalid copies count' }, { status: 400 });
     }
 
     // Fetch current pricing & shop open status
-    const { data: pricing, error: pricingError } = await supabase
+    const { data: pricing, error: pricingError } = await adminSupabase
       .from('pricing_settings')
       .select('*')
       .limit(1)
@@ -108,8 +99,6 @@ export async function POST(request: Request) {
     );
 
     // Generate daily sequential order code starting at XR-001 (resets daily at midnight)
-    // Use admin client to check order_code existence across ALL users (bypassing student RLS read isolation)
-    const adminSupabase = createAdminClient();
     let seqNumber = 1;
     let orderCode = `XR-${String(seqNumber).padStart(3, '0')}`;
 
@@ -128,59 +117,74 @@ export async function POST(request: Request) {
     }
 
     if (retries >= 100) {
-      // Fallback if 100 consecutive numbers are taken
       orderCode = `XR-${Date.now().toString(36).toUpperCase().slice(-4)}`;
-    }
-
-    // Ensure user profile record exists
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (!existingProfile) {
-      await supabase.from('profiles').insert({
-        id: user.id,
-        name: studentName.trim(),
-        email: user.email || '',
-        role: 'student',
-      });
     }
 
     // Create order record
     const mainFile = processedFiles[0];
-    const { data: order, error: orderError } = await supabase
+    const orderPayload = {
+      order_code: orderCode,
+      student_name: studentName.trim(),
+      email: email.trim(),
+      phone_number: phoneNumber.trim(),
+      files: processedFiles,
+      file_path: mainFile.filePath,
+      file_name: processedFiles.length === 1 ? mainFile.fileName : `${processedFiles.length} PDF Documents`,
+      page_count: totalPageCount,
+      color_mode: colorMode || mainFile.colorMode || ColorMode.BW,
+      custom_color_pages: colorMode === 'CUSTOM_PAGES' ? customColorPages : null,
+      side: side || mainFile.side || Side.SINGLE,
+      pages_per_sheet: pagesPerSheet || mainFile.pagesPerSheet || 1,
+      copies: copies || mainFile.copies || 1,
+      binding_type: bindingType || mainFile.bindingType || BindingType.NONE,
+      binding_cost: priceBreakdown.bindingCost,
+      printing_subtotal: priceBreakdown.printingSubtotal,
+      total_amount: priceBreakdown.totalAmount,
+      price_snapshot: pricing,
+      payment_screenshot_path: screenshotPath || null,
+      utr_number: paymentMethod === 'HAND_CASH' ? 'HAND_CASH' : utrNumber,
+      payment_status: 'PAYMENT_SUBMITTED',
+      order_status: 'PAYMENT_SUBMITTED',
+      expires_at: calculateExpiryDate(pricing.file_retention_days),
+    };
+
+    let { data: order, error: orderError } = await adminSupabase
       .from('orders')
-      .insert({
-        order_code: orderCode,
-        user_id: user.id,
-        student_name: studentName.trim(),
-        phone_number: phoneNumber.trim(),
-        files: processedFiles,
-        file_path: mainFile.filePath,
-        file_name: processedFiles.length === 1 ? mainFile.fileName : `${processedFiles.length} PDF Documents`,
-        page_count: totalPageCount,
-        color_mode: colorMode,
-        custom_color_pages: colorMode === 'CUSTOM_PAGES' ? customColorPages : null,
-        side: side,
-        pages_per_sheet: pagesPerSheet,
-        copies: copies || 1,
-        binding_type: bindingType,
-        binding_cost: priceBreakdown.bindingCost,
-        printing_subtotal: priceBreakdown.printingSubtotal,
-        total_amount: priceBreakdown.totalAmount,
-        price_snapshot: pricing,
-        payment_status: 'PAYMENT_SUBMITTED',
-        order_status: 'PAYMENT_SUBMITTED',
-        expires_at: calculateExpiryDate(pricing.file_retention_days),
-      })
+      .insert(orderPayload)
       .select()
       .single();
 
+    // Fallback if live DB check constraint does not include 'CUSTOM_PAGES'
+    if (orderError && orderError.message?.includes('orders_color_mode_check')) {
+      console.warn('color_mode constraint fallback triggered:', orderError.message);
+      const fallbackPayload = {
+        ...orderPayload,
+        color_mode: orderPayload.color_mode === 'CUSTOM_PAGES' ? 'COLOR' : 'BW',
+      };
+      const fallbackResult = await adminSupabase
+        .from('orders')
+        .insert(fallbackPayload)
+        .select()
+        .single();
+      order = fallbackResult.data;
+      orderError = fallbackResult.error;
+    }
+
     if (orderError) {
       console.error('Order Insert Error:', orderError);
-      return NextResponse.json({ success: false, error: `Failed to create order: ${orderError.message}` }, { status: 500 });
+      return NextResponse.json({ success: false, error: `Failed to create order: ${orderError.message}` }, { status: 400 });
+    }
+
+    // Trigger instant mobile push alert to admin via ntfy.sh
+    if (order) {
+      const modeText = order.utr_number === 'HAND_CASH' ? 'Hand Cash (Pay on Pickup)' : 'UPI / Online';
+      sendAdminNtfyNotification({
+        title: `New Order #${order.order_code}!`,
+        message: `Student: ${order.student_name || 'Student'}\nPhone: ${order.phone_number}\nAmount: ₹${Number(order.total_amount).toFixed(2)}\nPayment: ${modeText}`,
+        orderCode: order.order_code,
+        priority: 'high',
+        tags: ['package', 'printer'],
+      }).catch((err) => console.error('Ntfy push error:', err));
     }
 
     return NextResponse.json({ success: true, data: order }, { status: 201 });
@@ -192,58 +196,83 @@ export async function POST(request: Request) {
 }
 
 /**
- * GET /api/orders — List orders.
+ * GET /api/orders — Search / List orders by phone number, order code, array of codes, or admin query.
  */
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const adminSupabase = createAdminClient();
+    const cookieStore = await cookies();
+    const isAdmin = cookieStore.get('admin_session')?.value === 'true';
 
     const { searchParams } = new URL(request.url);
+    const phone = searchParams.get('phone');
+    const code = searchParams.get('code');
+    const codes = searchParams.get('codes');
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Check if admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+    // First Come, First Served (FCFS): Active/Pending orders are sorted by created_at ASCENDING (oldest first)
+    const sortAscending = status === 'COMPLETED' || status === 'CANCELLED' || status === 'REJECTED' ? false : true;
 
-    const isAdmin = profile?.role === 'admin';
-
-    let query = supabase
+    let query = adminSupabase
       .from('orders')
-      .select('*, profiles(name, email)', { count: 'exact' })
-      .order('created_at', { ascending: false })
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: sortAscending })
       .range(offset, offset + limit - 1);
 
-    if (!isAdmin) {
-      query = query.eq('user_id', user.id);
+    if (code) {
+      query = query.ilike('order_code', code.trim());
+    } else if (phone) {
+      query = query.eq('phone_number', phone.trim());
+    } else if (codes) {
+      const codeList = codes.split(',').map((c) => c.trim()).filter(Boolean);
+      if (codeList.length > 0) {
+        query = query.in('order_code', codeList);
+      }
+    } else if (search && isAdmin) {
+      query = query.or(`order_code.ilike.%${search}%,student_name.ilike.%${search}%,phone_number.ilike.%${search}%,email.ilike.%${search}%`);
     }
 
     if (status) {
-      query = query.eq('order_status', status);
-    }
-
-    if (search && isAdmin) {
-      query = query.or(`order_code.ilike.%${search}%,student_name.ilike.%${search}%,phone_number.ilike.%${search}%`);
+      if (status === 'REJECTED') {
+        query = query.or('order_status.eq.REJECTED,payment_status.eq.PAYMENT_REJECTED');
+      } else if (status === 'PAYMENT_SUBMITTED') {
+        query = query.eq('order_status', 'PAYMENT_SUBMITTED').neq('payment_status', 'PAYMENT_REJECTED');
+      } else {
+        query = query.eq('order_status', status);
+      }
     }
 
     const { data, error, count } = await query;
 
     if (error) {
+      console.error('Fetch Orders Error:', error);
       return NextResponse.json({ success: false, error: 'Failed to fetch orders' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data, count });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
+    const orderList = data || [];
+    // Generate signed URLs for payment proof screenshots using admin Supabase
+    for (const order of orderList) {
+      if (order.payment_screenshot_path) {
+        try {
+          const { data: signed } = await adminSupabase.storage
+            .from('payment-proofs')
+            .createSignedUrl(order.payment_screenshot_path, 86400);
+          if (signed?.signedUrl) {
+            order.payment_screenshot_url = signed.signedUrl;
+          }
+        } catch {
+          // Ignore signed URL failure
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true, data: orderList, count: count || 0 });
+  } catch (error) {
+    console.error('GET Orders Error:', error);
+    const msg = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

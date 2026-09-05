@@ -34,31 +34,22 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const adminCookie = request.cookies.get('admin_session')?.value;
 
-  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/admin'))) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  if (user && (pathname === '/login' || pathname === '/signup')) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
-  }
-
-  if (user && pathname.startsWith('/admin')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
+  // Protect /admin routes using admin session cookie
+  if (pathname.startsWith('/admin') && pathname !== '/admin-login') {
+    if (adminCookie !== 'true') {
       const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
+      url.pathname = '/admin-login';
       return NextResponse.redirect(url);
     }
+  }
+
+  // If already admin logged in, redirect /admin-login to /admin
+  if (pathname === '/admin-login' && adminCookie === 'true') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/admin';
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;

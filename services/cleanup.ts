@@ -24,54 +24,10 @@ export async function deleteExpiredFiles(): Promise<CleanupResult> {
   };
 
   try {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-    // 1. Find all orders created or completed more than 24 hours ago that still have PDF files stored
-    const { data: expiredOrders, error: queryError } = await supabase
-      .from('orders')
-      .select('id, file_path, files, payment_screenshot_path, order_code')
-      .or(`expires_at.lt.${new Date().toISOString()},created_at.lt.${twentyFourHoursAgo}`);
-
-    if (queryError) {
-      result.errors.push(`Query error: ${queryError.message}`);
-      return result;
-    }
-
-    if (!expiredOrders || expiredOrders.length === 0) {
-      return result;
-    }
-
-    for (const order of expiredOrders) {
-      result.ordersProcessed++;
-
-      // Delete main PDF file
-      if (order.file_path) {
-        await deleteFile(supabase, 'xerox-files', order.file_path, result);
-      }
-
-      // Delete itemized files list if present
-      if (Array.isArray(order.files)) {
-        for (const item of order.files) {
-          if (item && typeof item === 'object' && item.filePath) {
-            await deleteFile(supabase, 'xerox-files', item.filePath, result);
-          }
-        }
-      }
-
-      // Delete payment proof screenshot
-      if (order.payment_screenshot_path) {
-        await deleteFile(supabase, 'payment-proofs', order.payment_screenshot_path, result);
-      }
-
-      // Clear storage paths from database row while keeping order text history
-      await supabase
-        .from('orders')
-        .update({
-          file_path: null,
-          payment_screenshot_path: null,
-        })
-        .eq('id', order.id);
-    }
+    // Automatic 24-hour deletion disabled per user specification.
+    // Order clearing is performed manually by admin via Clear All Order Data button.
+    console.log('24-Hour automatic cleanup disabled. Orders remain intact until manually cleared.');
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     result.errors.push(`Cleanup error: ${message}`);

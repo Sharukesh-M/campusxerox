@@ -121,7 +121,7 @@ export default function PrintPreviewCanvas({
                     <span className={`text-[8px] font-bold ${
                       hasColor ? 'text-violet-600' : 'text-surface-400'
                     }`}>
-                      {hasColor ? '🎨 Color' : '🖨 B&W'}
+                      {hasColor ? 'Color' : 'B&W'}
                     </span>
                   </div>
 
@@ -152,9 +152,9 @@ export default function PrintPreviewCanvas({
 
       {/* Footer Info */}
       <div className="relative z-10 text-center text-xs text-surface-300 mt-3 flex items-center justify-center gap-3">
-        <span>📄 {pps === 2 ? '2 Pages Per Sheet (Horizontal)' : '1 Page Per Sheet'}</span>
+        <span>{pps === 2 ? '2 Pages Per Sheet (Horizontal)' : '1 Page Per Sheet'}</span>
         <span>·</span>
-        <span>{isBothSides ? '🔄 Double-Sided (Both Sides)' : '📄 Single-Sided'}</span>
+        <span>{isBothSides ? 'Double-Sided (Both Sides)' : 'Single-Sided'}</span>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 
@@ -7,26 +7,16 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const cookieStore = await cookies();
+  const isAdmin = cookieStore.get('admin_session')?.value === 'true';
 
-  if (!user) {
-    redirect('/login');
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('name, role')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile || profile.role !== 'admin') {
-    redirect('/dashboard');
+  if (!isAdmin) {
+    redirect('/admin-login');
   }
 
   return (
-    <div className="min-h-screen bg-surface-50">
-      <Navbar userName={profile.name || user.email || ''} userRole="admin" />
+    <div className="min-h-screen bg-surface-50 dark:bg-slate-950 transition-colors">
+      <Navbar userName="Admin" userRole="admin" />
       <main className="max-w-5xl mx-auto px-4 py-6">
         {children}
       </main>

@@ -1,24 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 /**
- * POST /api/upload/screenshot — Upload a payment screenshot.
- * Validates user auth, image format, size, and uploads using admin client.
+ * POST /api/upload/screenshot — Upload a payment screenshot (Guest mode enabled).
+ * Validates image format, size, and uploads using Admin Client.
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-
-    // Verify user authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const orderCode = formData.get('orderCode') as string | null;
@@ -46,33 +37,17 @@ export async function POST(request: Request) {
 
     // Determine file extension
     const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-    const filePath = `${user.id}/${orderCode}.${ext}`;
+    const timestamp = Date.now();
+    const filePath = `guest/${orderCode}_${timestamp}.${ext}`;
 
-    // Upload to payment-proofs bucket
-    let uploadError: { message: string } | null = null;
-    try {
-      const adminSupabase = createAdminClient();
-      const { error: adminErr } = await adminSupabase.storage
-        .from('payment-proofs')
-        .upload(filePath, uint8Array, {
-          contentType: file.type,
-          upsert: true,
-        });
-      uploadError = adminErr;
-    } catch {
-      uploadError = { message: 'Admin client failed' };
-    }
-
-    if (uploadError) {
-      console.warn('Admin screenshot upload failed, trying user client fallback:', uploadError.message);
-      const { error: userErr } = await supabase.storage
-        .from('payment-proofs')
-        .upload(filePath, uint8Array, {
-          contentType: file.type,
-          upsert: true,
-        });
-      uploadError = userErr;
-    }
+    // Upload to payment-proofs bucket via Admin Client
+    const adminSupabase = createAdminClient();
+    const { error: uploadError } = await adminSupabase.storage
+      .from('payment-proofs')
+      .upload(filePath, uint8Array, {
+        contentType: file.type,
+        upsert: true,
+      });
 
     if (uploadError) {
       console.error('Screenshot Upload Error:', uploadError);

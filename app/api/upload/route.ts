@@ -1,25 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PDFDocument } from 'pdf-lib';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 /**
- * POST /api/upload — Upload a PDF file to Supabase Storage.
- * Validates user auth, file type, size, and extracts page count.
- * Uses admin client for storage upload to ensure reliability.
+ * POST /api/upload — Upload a PDF file to Supabase Storage (Guest mode enabled).
+ * Validates file type, size, extracts page count, and uploads via Admin Client.
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-
-    // Verify student user authentication on server
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
@@ -53,36 +43,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid or corrupted PDF file' }, { status: 400 });
     }
 
-    // Generate path scoped to user ID
+    // Generate path for guest uploads
     const timestamp = Date.now();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = `${user.id}/${timestamp}_${safeName}`;
+    const filePath = `guest/${timestamp}_${safeName}`;
 
-    // Upload to Supabase Storage
-    let uploadError: { message: string } | null = null;
-    try {
-      const adminSupabase = createAdminClient();
-      const { error: adminErr } = await adminSupabase.storage
-        .from('xerox-files')
-        .upload(filePath, uint8Array, {
-          contentType: 'application/pdf',
-          upsert: false,
-        });
-      uploadError = adminErr;
-    } catch {
-      uploadError = { message: 'Admin client failed' };
-    }
-
-    if (uploadError) {
-      console.warn('Admin upload failed, trying user client fallback:', uploadError.message);
-      const { error: userErr } = await supabase.storage
-        .from('xerox-files')
-        .upload(filePath, uint8Array, {
-          contentType: 'application/pdf',
-          upsert: false,
-        });
-      uploadError = userErr;
-    }
+    // Upload to Supabase Storage using Admin Client
+    const adminSupabase = createAdminClient();
+    const { error: uploadError } = await adminSupabase.storage
+      .from('xerox-files')
+      .upload(filePath, uint8Array, {
+        contentType: 'application/pdf',
+        upsert: false,
+      });
 
     if (uploadError) {
       console.error('Supabase Storage Upload Error:', uploadError);

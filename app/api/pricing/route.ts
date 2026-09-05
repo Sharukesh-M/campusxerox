@@ -1,19 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { cookies } from 'next/headers';
 
 /**
- * GET /api/pricing — Get current pricing settings & shop operating status.
+ * GET /api/pricing — Get current pricing settings & shop operating status (Public).
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const adminSupabase = createAdminClient();
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data, error } = await supabase
+    const { data, error } = await adminSupabase
       .from('pricing_settings')
       .select('*')
       .limit(1)
@@ -24,8 +20,9 @@ export async function GET() {
     }
 
     return NextResponse.json({ success: true, data });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
 
@@ -34,24 +31,14 @@ export async function GET() {
  */
 export async function PUT(request: Request) {
   try {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const isAdmin = cookieStore.get('admin_session')?.value === 'true';
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    if (!isAdmin) {
+      return NextResponse.json({ success: false, error: 'Forbidden — Admin authorization required' }, { status: 403 });
     }
 
-    // Verify admin role
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
-    }
-
+    const adminSupabase = createAdminClient();
     const body = await request.json();
 
     const allowedFields = [
@@ -85,7 +72,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    const { data: existing } = await supabase
+    const { data: existing } = await adminSupabase
       .from('pricing_settings')
       .select('id')
       .limit(1)
@@ -95,7 +82,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ success: false, error: 'Pricing settings not found' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await adminSupabase
       .from('pricing_settings')
       .update(updates)
       .eq('id', existing.id)
@@ -107,7 +94,8 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ success: true, data });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

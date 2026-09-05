@@ -84,6 +84,7 @@ export interface Order {
   // Student contact info for order
   student_name: string;
   phone_number: string;
+  email?: string | null;
 
   // Multi-file info with individual per-PDF configurations
   files: PdfDocumentConfig[];
@@ -107,6 +108,7 @@ export interface Order {
 
   // Payment proof
   payment_screenshot_path: string | null;
+  payment_screenshot_url?: string | null;
   utr_number: string | null;
   ocr_extracted_utr: string | null;
   utr_match_status: UtrMatchStatus;
@@ -115,6 +117,7 @@ export interface Order {
   payment_status: PaymentStatus;
   order_status: OrderStatus;
   rejection_reason: string | null;
+  cancellation_reason?: string | null;
 
   // Timestamps
   created_at: string;

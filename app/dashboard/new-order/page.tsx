@@ -23,6 +23,7 @@ export default function NewOrderPage() {
 
   // Student contact info
   const [studentName, setStudentName] = useState('');
+  const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
 
   // Step 1 & 2: Multi-PDF Upload & Itemized Configurations
@@ -33,29 +34,30 @@ export default function NewOrderPage() {
   // Grand total estimated price
   const [estimatedPrice, setEstimatedPrice] = useState(0);
 
+  // Notice language toggle state ('ta' | 'en' | 'te')
+  const [noticeLang, setNoticeLang] = useState<'ta' | 'en' | 'te'>('ta');
+  const [showGuide, setShowGuide] = useState(true);
+
   // Step 4: Payment
+  const [paymentMode, setPaymentMode] = useState<'UPI' | 'HAND_CASH'>('UPI');
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [utrNumber, setUtrNumber] = useState('');
   const [orderCode, setOrderCode] = useState('');
 
-  // Fetch initial profile & shop settings
+  // Fetch initial pricing & load saved contact info
   useEffect(() => {
     fetchInitialData();
   }, []);
 
   const fetchInitialData = async () => {
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', user.id)
-          .single();
-        if (profile?.name) {
-          setStudentName(profile.name);
-        }
+      if (typeof window !== 'undefined') {
+        const savedName = localStorage.getItem('saved_student_name');
+        const savedEmail = localStorage.getItem('saved_email');
+        const savedPhone = localStorage.getItem('saved_phone');
+        if (savedName) setStudentName(savedName);
+        if (savedEmail) setEmail(savedEmail);
+        if (savedPhone) setPhoneNumber(savedPhone);
       }
 
       const res = await fetch('/api/pricing');
@@ -182,52 +184,30 @@ export default function NewOrderPage() {
     });
   };
 
-  // Step 3→4: Create order
-  const handleCreateOrder = async () => {
-    if (!studentName.trim() || !phoneNumber.trim()) {
-      setError('Please enter your Student Name and WhatsApp/Phone Number');
+  // Step 3→4: Proceed to Payment selection (does NOT place order in DB yet)
+  const handleProceedToPaymentStep = () => {
+    if (!studentName.trim() || !email.trim() || !phoneNumber.trim()) {
+      setError('Please enter your Student Name, Email Address, and Phone Number');
+      setStep(2);
+      return;
+    }
+    if (pdfFiles.length === 0) {
+      setError('Please upload at least one PDF file');
       setStep(1);
       return;
     }
 
-    setLoading(true);
-    setError('');
-
-    try {
-      const activeItem = pdfFiles[0];
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentName: studentName.trim(),
-          phoneNumber: phoneNumber.trim(),
-          files: pdfFiles,
-          colorMode: activeItem?.colorMode || ColorMode.BW,
-          customColorPages: activeItem?.customColorPages || '',
-          side: activeItem?.side || Side.SINGLE,
-          pagesPerSheet: activeItem?.pagesPerSheet || 1,
-          copies: activeItem?.copies || 1,
-          bindingType: activeItem?.bindingType || BindingType.NONE,
-        }),
-      });
-
-      const data = await res.json();
-      if (!data.success) {
-        setError(data.error || 'Failed to create order');
-        return;
-      }
-
-      setOrderCode(data.data.order_code);
-      setEstimatedPrice(Number(data.data.total_amount));
-      setStep(4);
-    } catch {
-      setError('Failed to create order. Please try again.');
-    } finally {
-      setLoading(false);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('saved_student_name', studentName.trim());
+      localStorage.setItem('saved_email', email.trim());
+      localStorage.setItem('saved_phone', phoneNumber.trim());
     }
+
+    setError('');
+    setStep(4);
   };
 
-  // Step 4: Submit payment proof
+  // Step 4: Place order with UPI payment details
   const handleSubmitPayment = async () => {
     if (!screenshotFile || !utrNumber.trim()) {
       setError('Please upload a screenshot and enter the UTR number');
@@ -240,7 +220,7 @@ export default function NewOrderPage() {
     try {
       const formData = new FormData();
       formData.append('file', screenshotFile);
-      formData.append('orderCode', orderCode);
+      formData.append('orderCode', 'TEMP');
 
       const uploadRes = await fetch('/api/upload/screenshot', {
         method: 'POST',
@@ -250,27 +230,99 @@ export default function NewOrderPage() {
 
       if (!uploadData.success) {
         setError(uploadData.error || 'Failed to upload screenshot');
+        setLoading(false);
         return;
       }
 
-      const paymentRes = await fetch(`/api/orders/${orderCode}/payment`, {
+      const activeItem = pdfFiles[0];
+      const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          screenshotPath: uploadData.data.screenshotPath,
+          studentName: studentName.trim(),
+          email: email.trim(),
+          phoneNumber: phoneNumber.trim(),
+          files: pdfFiles,
+          colorMode: activeItem?.colorMode || ColorMode.BW,
+          customColorPages: activeItem?.customColorPages || '',
+          side: activeItem?.side || Side.SINGLE,
+          pagesPerSheet: activeItem?.pagesPerSheet || 1,
+          copies: activeItem?.copies || 1,
+          bindingType: activeItem?.bindingType || BindingType.NONE,
+          paymentMethod: 'UPI',
           utrNumber: utrNumber.trim(),
+          screenshotPath: uploadData.data.screenshotPath,
         }),
       });
 
-      const paymentData = await paymentRes.json();
-      if (!paymentData.success) {
-        setError(paymentData.error || 'Failed to submit payment');
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.error || 'Failed to place order');
+        setLoading(false);
         return;
       }
 
-      router.push(`/dashboard/orders/${orderCode}`);
+      const createdCode = data.data.order_code;
+      if (typeof window !== 'undefined') {
+        const saved = JSON.parse(localStorage.getItem('my_orders') || '[]');
+        if (!saved.includes(createdCode)) {
+          saved.unshift(createdCode);
+          localStorage.setItem('my_orders', JSON.stringify(saved));
+        }
+      }
+
+      router.push(`/track?code=${createdCode}`);
     } catch {
-      setError('Failed to submit payment. Please try again.');
+      setError('Failed to submit order. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleHandCashSubmit = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const activeItem = pdfFiles[0];
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: studentName.trim(),
+          email: email.trim(),
+          phoneNumber: phoneNumber.trim(),
+          files: pdfFiles,
+          colorMode: activeItem?.colorMode || ColorMode.BW,
+          customColorPages: activeItem?.customColorPages || '',
+          side: activeItem?.side || Side.SINGLE,
+          pagesPerSheet: activeItem?.pagesPerSheet || 1,
+          copies: activeItem?.copies || 1,
+          bindingType: activeItem?.bindingType || BindingType.NONE,
+          paymentMethod: 'HAND_CASH',
+          utrNumber: 'HAND_CASH',
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.error || 'Failed to place order');
+        setLoading(false);
+        return;
+      }
+
+      const createdCode = data.data.order_code;
+      if (typeof window !== 'undefined') {
+        const saved = JSON.parse(localStorage.getItem('my_orders') || '[]');
+        if (!saved.includes(createdCode)) {
+          saved.unshift(createdCode);
+          localStorage.setItem('my_orders', JSON.stringify(saved));
+        }
+      }
+
+      router.push(`/track?code=${createdCode}`);
+    } catch {
+      setError('Failed to confirm hand cash order. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -328,14 +380,129 @@ export default function NewOrderPage() {
       {/* ==================== STEP 1: Student Details & Multi-PDF Upload ==================== */}
       {step === 1 && (
         <div className="space-y-5">
-          <h2 className="text-xl font-bold text-surface-900">Student Details & Upload</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-xl font-extrabold text-surface-900 dark:text-white">Order Xerox</h2>
+            <div className="bg-amber-50 dark:bg-amber-950/60 px-3 py-1.5 rounded-xl border border-amber-200 dark:border-amber-800 text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+              <span>📞 Contact Person: <strong>Surya</strong></span>
+              <a href="tel:8015587361" className="underline font-mono">8015587361</a>
+            </div>
+          </div>
 
-          <div className="bg-white border border-surface-200 rounded-2xl p-4 space-y-3">
-            <h3 className="text-xs font-bold text-surface-500 uppercase tracking-wide">
+          {/* NEUMORPHISM UI DESIGN: RATES AND PRICING CARD */}
+          <div className="bg-[#e6ebf4] dark:bg-[#0f172a] shadow-[10px_10px_24px_#c2cad8,-10px_-10px_24px_#ffffff] dark:shadow-[10px_10px_24px_#070b14,-10px_-10px_24px_#172340] rounded-3xl p-6 border border-white/60 dark:border-slate-800/80 space-y-5 transition-all">
+            <div className="flex items-center justify-between border-b border-surface-300/40 dark:border-slate-800 pb-3">
+              <div>
+                <h2 className="text-base font-black text-surface-900 dark:text-white tracking-tight flex items-center gap-2">
+                  Rates & Pricing Catalog
+                </h2>
+                <p className="text-xs text-surface-500 dark:text-slate-400 mt-0.5">Live store printing rates per page</p>
+              </div>
+              <span className="text-[10px] font-black bg-primary-50 dark:bg-indigo-950/80 text-primary-600 dark:text-primary-400 px-3 py-1 rounded-full border border-primary-200 dark:border-indigo-800">
+                Live Rates
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 text-xs">
+              <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] rounded-2xl p-4 border border-white/40 dark:border-slate-800 flex flex-col justify-between">
+                <span className="text-surface-500 dark:text-slate-400 font-extrabold text-[11px]">B&W Single Side</span>
+                <span className="text-lg font-black text-surface-900 dark:text-white mt-2">
+                  ₹{Number(pricing?.bw_single_side || 1.20).toFixed(2)}
+                  <span className="text-[10px] font-normal text-surface-400 dark:text-slate-500 font-mono"> /page</span>
+                </span>
+              </div>
+
+              <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] rounded-2xl p-4 border border-white/40 dark:border-slate-800 flex flex-col justify-between">
+                <span className="text-surface-500 dark:text-slate-400 font-extrabold text-[11px]">B&W Both Sides</span>
+                <span className="text-lg font-black text-surface-900 dark:text-white mt-2">
+                  ₹{Number(pricing?.bw_both_side || 1.20).toFixed(2)}
+                  <span className="text-[10px] font-normal text-surface-400 dark:text-slate-500 font-mono"> /side</span>
+                </span>
+              </div>
+
+              <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] rounded-2xl p-4 border border-white/40 dark:border-slate-800 flex flex-col justify-between">
+                <span className="text-surface-500 dark:text-slate-400 font-extrabold text-[11px]">2 Pages / Sheet</span>
+                <span className="text-lg font-black text-surface-900 dark:text-white mt-2">
+                  ₹{Number(pricing?.bw_two_pages_sheet || 1.20).toFixed(2)}
+                  <span className="text-[10px] font-normal text-surface-400 dark:text-slate-500 font-mono"> /sheet</span>
+                </span>
+              </div>
+
+              <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] rounded-2xl p-4 border border-white/40 dark:border-slate-800 flex flex-col justify-between">
+                <span className="text-amber-700 dark:text-amber-300 font-extrabold text-[11px]">Full Color Print</span>
+                <span className="text-lg font-black text-amber-600 dark:text-amber-400 mt-2">
+                  ₹{Number(pricing?.color_per_page || 10.00).toFixed(2)}
+                  <span className="text-[10px] font-normal text-surface-400 dark:text-slate-500 font-mono"> /page</span>
+                </span>
+              </div>
+
+              <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] rounded-2xl p-4 border border-white/40 dark:border-slate-800 col-span-2 sm:col-span-1 flex flex-col justify-between">
+                <span className="text-indigo-700 dark:text-indigo-300 font-extrabold text-[11px]">Soft Binding</span>
+                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-2">
+                  +₹{Number(pricing?.soft_binding_cost || 20.00).toFixed(2)}
+                  <span className="text-[10px] font-normal text-surface-400 dark:text-slate-500 font-mono"> /book</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* NEUMORPHISM UI DESIGN: INTERACTIVE PDF CONFIGURATION GUIDE */}
+          {showGuide && (
+            <div className="bg-[#e6ebf4] dark:bg-[#0f172a] shadow-[10px_10px_24px_#c2cad8,-10px_-10px_24px_#ffffff] dark:shadow-[10px_10px_24px_#070b14,-10px_-10px_24px_#172340] rounded-3xl p-5 border border-white/60 dark:border-slate-800/80 space-y-3.5 relative transition-all">
+              <button
+                onClick={() => setShowGuide(false)}
+                className="absolute top-4 right-4 w-7 h-7 bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[3px_3px_6px_#cbd4e2,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#070b14,-3px_-3px_6px_#1e2b48] border border-white/50 dark:border-slate-800 rounded-full flex items-center justify-center text-xs font-black text-surface-500 dark:text-slate-400 hover:text-danger-600 dark:hover:text-danger-400 transition-all active:scale-90"
+                title="Dismiss Guide"
+              >
+                ✕
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✨</span>
+                <div>
+                  <h3 className="font-black text-sm text-surface-900 dark:text-white tracking-tight">
+                    How to Configure Multiple PDFs
+                  </h3>
+                  <p className="text-[11px] text-surface-500 dark:text-slate-400 font-medium">Simple 3-step guide for ordering print jobs</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] p-4 rounded-2xl border border-white/40 dark:border-slate-800 space-y-1">
+                  <div className="flex items-center gap-1.5 font-black text-primary-600 dark:text-primary-400">
+                    <span className="w-5 h-5 bg-primary-100 dark:bg-primary-950/80 rounded-full flex items-center justify-center text-[10px] font-black border border-primary-300 dark:border-primary-700">1</span>
+                    <span>Add All PDFs</span>
+                  </div>
+                  <p className="text-surface-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                    Upload one or multiple PDF documents at once in Step 1.
+                  </p>
+                </div>
+                <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] p-4 rounded-2xl border border-white/40 dark:border-slate-800 space-y-1">
+                  <div className="flex items-center gap-1.5 font-black text-indigo-600 dark:text-indigo-400">
+                    <span className="w-5 h-5 bg-indigo-100 dark:bg-indigo-950/80 rounded-full flex items-center justify-center text-[10px] font-black border border-indigo-300 dark:border-indigo-700">2</span>
+                    <span>Click PDF Tabs</span>
+                  </div>
+                  <p className="text-surface-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                    In Step 2, click document tabs to configure per-file settings.
+                  </p>
+                </div>
+                <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] p-4 rounded-2xl border border-white/40 dark:border-slate-800 space-y-1">
+                  <div className="flex items-center gap-1.5 font-black text-amber-600 dark:text-amber-400">
+                    <span className="w-5 h-5 bg-amber-100 dark:bg-amber-950/80 rounded-full flex items-center justify-center text-[10px] font-black border border-amber-300 dark:border-amber-700">3</span>
+                    <span>Custom Color Pages</span>
+                  </div>
+                  <p className="text-surface-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                    Specify specific color page numbers (e.g. 1, 5-10) to save cost!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CONTACT INFO CARD */}
+          <div className="bg-white dark:bg-slate-900 border border-surface-200 dark:border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm">
+            <h3 className="text-xs font-bold text-surface-500 dark:text-slate-400 uppercase tracking-wide">
               Contact Information
             </h3>
             <div>
-              <label htmlFor="student-name" className="block text-xs font-medium text-surface-700 mb-1">
+              <label htmlFor="student-name" className="block text-xs font-bold text-surface-700 dark:text-slate-300 mb-1">
                 Student Name *
               </label>
               <input
@@ -345,22 +512,44 @@ export default function NewOrderPage() {
                 onChange={(e) => setStudentName(e.target.value)}
                 placeholder="Enter your full name"
                 required
-                className="w-full px-3.5 py-2.5 rounded-xl border border-surface-300 bg-surface-50 text-surface-900 focus:border-primary-500 outline-none text-sm"
+                className="w-full px-4 py-3 rounded-2xl border border-surface-300 dark:border-slate-700 bg-surface-50 dark:bg-slate-800 text-surface-900 dark:text-white focus:border-primary-500 outline-none text-sm font-medium"
               />
             </div>
-            <div>
-              <label htmlFor="student-phone" className="block text-xs font-medium text-surface-700 mb-1">
-                WhatsApp / Phone Number *
-              </label>
-              <input
-                id="student-phone"
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="10-digit mobile number"
-                required
-                className="w-full px-3.5 py-2.5 rounded-xl border border-surface-300 bg-surface-50 text-surface-900 focus:border-primary-500 outline-none text-sm font-mono"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="student-email" className="block text-xs font-bold text-surface-700 dark:text-slate-300 mb-1">
+                  Email Address * <span className="text-primary-600 font-semibold">(Compulsory)</span>
+                </label>
+                <input
+                  id="student-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your.email@example.com"
+                  required
+                  className="w-full px-4 py-3 rounded-2xl border border-surface-300 dark:border-slate-700 bg-surface-50 dark:bg-slate-800 text-surface-900 dark:text-white focus:border-primary-500 outline-none text-sm font-medium"
+                />
+                <p className="text-[11px] text-surface-500 dark:text-slate-400 mt-1 leading-snug">
+                  Required to confirm your order and send tracking updates & digital receipt.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="student-phone" className="block text-xs font-bold text-surface-700 dark:text-slate-300 mb-1">
+                  WhatsApp / Phone Number *
+                </label>
+                <input
+                  id="student-phone"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="10-digit mobile number"
+                  required
+                  className="w-full px-4 py-3 rounded-2xl border border-surface-300 dark:border-slate-700 bg-surface-50 dark:bg-slate-800 text-surface-900 dark:text-white focus:border-primary-500 outline-none text-sm font-mono font-medium"
+                />
+                <p className="text-[11px] text-surface-500 dark:text-slate-400 mt-1 leading-snug">
+                  Used for order tracking and live ready-for-pickup SMS alert.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -503,7 +692,7 @@ export default function NewOrderPage() {
 
           {/* ACTIVE PDF BANNER */}
           <div className="bg-surface-900 text-white rounded-xl px-4 py-3 flex items-center justify-between text-xs">
-            <span className="font-bold truncate max-w-[200px]">📄 {currentActivePdf.fileName}</span>
+            <span className="font-bold truncate max-w-[200px]">{currentActivePdf.fileName}</span>
             <span className="text-surface-300 font-mono">{currentActivePdf.pageCount} pages</span>
           </div>
 
@@ -530,7 +719,7 @@ export default function NewOrderPage() {
                       : 'border-surface-200 bg-white text-surface-600'
                   }`}
                 >
-                  🖨 All B&W
+                  All B&W
                 </button>
 
                 <button
@@ -541,7 +730,7 @@ export default function NewOrderPage() {
                       : 'border-surface-200 bg-white text-surface-600'
                   }`}
                 >
-                  🎨 All Color
+                  All Color
                 </button>
 
                 <button
@@ -552,7 +741,7 @@ export default function NewOrderPage() {
                       : 'border-surface-200 bg-white text-surface-600'
                   }`}
                 >
-                  ✨ Specific Color Pages
+                  Specific Color Pages
                 </button>
               </div>
 
@@ -753,11 +942,10 @@ export default function NewOrderPage() {
               ← Back
             </button>
             <button
-              onClick={handleCreateOrder}
-              disabled={loading}
-              className="flex-1 bg-primary-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-700 disabled:opacity-50 active:scale-[0.98]"
+              onClick={handleProceedToPaymentStep}
+              className="flex-1 bg-primary-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-700 active:scale-[0.98]"
             >
-              {loading ? 'Creating...' : 'Proceed to Pay →'}
+              Select Payment Method →
             </button>
           </div>
         </div>
@@ -766,122 +954,227 @@ export default function NewOrderPage() {
       {/* ==================== STEP 4: Manual Payment ==================== */}
       {step === 4 && (
         <div className="space-y-5">
-          <h2 className="text-xl font-bold text-surface-900">Pay & Submit</h2>
+          <h2 className="text-xl font-bold text-surface-900 dark:text-white">Select Payment & Confirm Order</h2>
 
-          <div className="bg-success-50 border border-success-500/20 rounded-2xl p-4 text-center">
-            <p className="text-xs text-success-600 font-medium">Order Created</p>
-            <p className="text-2xl font-bold text-success-600 mt-1">#{orderCode}</p>
+          <div className="bg-primary-50 dark:bg-primary-950/60 border border-primary-500/20 dark:border-primary-700/50 rounded-2xl p-4 text-center">
+            <p className="text-xs text-primary-600 dark:text-primary-300 font-bold uppercase tracking-wider">Grand Total Amount Due</p>
+            <p className="text-2xl font-black text-primary-700 dark:text-primary-200 mt-1">₹{estimatedPrice.toFixed(2)}</p>
           </div>
 
-          {/* UPI PAYMENT CARD */}
-          <div className="bg-white border-2 border-primary-100 rounded-2xl p-5 space-y-4 text-center shadow-sm">
-            <h3 className="font-bold text-base text-surface-900">
-              Pay <span className="text-primary-600 text-xl font-extrabold">₹{estimatedPrice.toFixed(2)}</span> to Surya R
-            </h3>
-
-            {/* Live QR Code / Custom Uploaded QR Photo */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="bg-white p-3 rounded-2xl border-2 border-surface-200 shadow-md">
-                <img
-                  src={
-                    pricing?.upi_qr_image_path ||
-                    `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                      `upi://pay?pa=${pricing?.upi_id || 'surya2092005-1@oksbi'}&pn=Surya%20R&am=${estimatedPrice.toFixed(2)}&cu=INR`
-                    )}`
-                  }
-                  alt="UPI QR Code"
-                  className="w-48 h-48 rounded-xl object-contain"
-                />
+          {/* NEUMORPHISM UI DESIGN: MULTILINGUAL NOTICE CARD WITH INTERACTIVE TRANSLATE BUTTONS */}
+          <div className="bg-[#e6ebf4] dark:bg-[#0f172a] shadow-[10px_10px_24px_#c2cad8,-10px_-10px_24px_#ffffff] dark:shadow-[10px_10px_24px_#070b14,-10px_-10px_24px_#172340] rounded-3xl p-5 text-center border border-amber-300/50 dark:border-amber-600/40 space-y-3.5 transition-all">
+            <div className="flex items-center justify-between pb-2 border-b border-surface-300/40 dark:border-slate-800">
+              <span className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider flex items-center gap-1.5">
+                Notice Board
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-surface-500 dark:text-slate-400 mr-1 hidden sm:inline">Translate:</span>
+                <button
+                  onClick={() => setNoticeLang('ta')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all active:scale-95 ${
+                    noticeLang === 'ta'
+                      ? 'bg-amber-500 text-white shadow-[inset_2px_2px_4px_#b45309,inset_-2px_-2px_4px_#f59e0b]'
+                      : 'bg-[#f0f4f9] dark:bg-[#131b2e] text-surface-700 dark:text-slate-200 shadow-[3px_3px_6px_#cbd4e2,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#070b14,-3px_-3px_6px_#1e2b48] border border-white/50 dark:border-slate-800'
+                  }`}
+                >
+                  Tamil
+                </button>
+                <button
+                  onClick={() => setNoticeLang('en')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all active:scale-95 ${
+                    noticeLang === 'en'
+                      ? 'bg-amber-500 text-white shadow-[inset_2px_2px_4px_#b45309,inset_-2px_-2px_4px_#f59e0b]'
+                      : 'bg-[#f0f4f9] dark:bg-[#131b2e] text-surface-700 dark:text-slate-200 shadow-[3px_3px_6px_#cbd4e2,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#070b14,-3px_-3px_6px_#1e2b48] border border-white/50 dark:border-slate-800'
+                  }`}
+                >
+                  English
+                </button>
+                <button
+                  onClick={() => setNoticeLang('te')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all active:scale-95 ${
+                    noticeLang === 'te'
+                      ? 'bg-amber-500 text-white shadow-[inset_2px_2px_4px_#b45309,inset_-2px_-2px_4px_#f59e0b]'
+                      : 'bg-[#f0f4f9] dark:bg-[#131b2e] text-surface-700 dark:text-slate-200 shadow-[3px_3px_6px_#cbd4e2,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#070b14,-3px_-3px_6px_#1e2b48] border border-white/50 dark:border-slate-800'
+                  }`}
+                >
+                  Telugu
+                </button>
               </div>
-              <p className="text-xs text-surface-500 mt-2 font-medium">Scan with GPay, PhonePe, Paytm, or BHIM</p>
             </div>
 
-            {/* 1-Click Mobile Pay Button */}
-            <a
-              href={`upi://pay?pa=${pricing?.upi_id || 'surya2092005-1@oksbi'}&pn=Surya%20R&am=${estimatedPrice.toFixed(2)}&cu=INR`}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              <span>Tap to Pay ₹{estimatedPrice.toFixed(2)} via UPI App</span>
-            </a>
+            <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,inset_-3px_-3px_6px_#1e2b48] rounded-2xl p-4 border border-white/40 dark:border-slate-800">
+              <p className="text-base font-black text-surface-900 dark:text-amber-100 tracking-wide">
+                {noticeLang === 'ta' && 'கடன் அன்பை முறிக்கும்'}
+                {noticeLang === 'en' && 'Debt destroys love'}
+                {noticeLang === 'te' && 'Appu leni ganji doppede chalunu'}
+              </p>
+            </div>
+          </div>
 
-            {/* UPI ID Copy Box */}
-            <div className="bg-surface-50 rounded-xl p-3 flex items-center justify-between border border-surface-200">
-              <div className="text-left">
-                <p className="text-[10px] text-surface-400 font-bold uppercase">UPI ID</p>
-                <p className="font-mono text-sm font-bold text-surface-900 select-all">
-                  {pricing?.upi_id || 'surya2092005-1@oksbi'}
+          {/* NEUMORPHISM UI DESIGN: PAYMENT METHOD TOGGLE (UPI vs HAND CASH) */}
+          <div className="bg-[#e6ebf4] dark:bg-[#0f172a] shadow-[10px_10px_24px_#c2cad8,-10px_-10px_24px_#ffffff] dark:shadow-[10px_10px_24px_#070b14,-10px_-10px_24px_#172340] rounded-3xl p-3 border border-white/60 dark:border-slate-800/80 flex gap-2">
+            <button
+              onClick={() => setPaymentMode('UPI')}
+              className={`flex-1 py-3 px-4 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 ${
+                paymentMode === 'UPI'
+                  ? 'bg-primary-600 text-white shadow-[inset_2px_2px_4px_#3730a3,inset_-2px_-2px_4px_#6366f1]'
+                  : 'bg-[#f0f4f9] dark:bg-[#131b2e] text-surface-700 dark:text-slate-200 shadow-[3px_3px_6px_#cbd4e2,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#070b14,-3px_-3px_6px_#1e2b48] border border-white/50 dark:border-slate-800'
+              }`}
+            >
+              UPI / Online Payment
+            </button>
+            <button
+              onClick={() => setPaymentMode('HAND_CASH')}
+              className={`flex-1 py-3 px-4 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 ${
+                paymentMode === 'HAND_CASH'
+                  ? 'bg-emerald-600 text-white shadow-[inset_2px_2px_4px_#065f46,inset_-2px_-2px_4px_#10b981]'
+                  : 'bg-[#f0f4f9] dark:bg-[#131b2e] text-surface-700 dark:text-slate-200 shadow-[3px_3px_6px_#cbd4e2,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#070b14,-3px_-3px_6px_#1e2b48] border border-white/50 dark:border-slate-800'
+              }`}
+            >
+              Hand Cash (Pay on Pickup)
+            </button>
+          </div>
+
+          {/* HAND CASH PAYMENT OPTION CONTAINER */}
+          {paymentMode === 'HAND_CASH' && (
+            <div className="bg-[#e6ebf4] dark:bg-[#0f172a] shadow-[10px_10px_24px_#c2cad8,-10px_-10px_24px_#ffffff] dark:shadow-[10px_10px_24px_#070b14,-10px_-10px_24px_#172340] rounded-3xl p-6 border border-emerald-300/50 dark:border-emerald-600/40 text-center space-y-4 transition-all">
+              <div>
+                <h3 className="text-lg font-black text-surface-900 dark:text-white">
+                  Hand Cash on Pickup
+                </h3>
+                <p className="text-xs text-surface-500 dark:text-slate-400 mt-1">
+                  Pay <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold text-base">₹{estimatedPrice.toFixed(2)}</strong> in cash when collecting printouts at shop
                 </p>
               </div>
+
+              <div className="bg-[#f0f4f9] dark:bg-[#131b2e] shadow-[inset_3px_3px_6px_#cbd4e2,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#070b14,-3px_-3px_6px_#1e2b48] rounded-2xl p-4 border border-white/40 dark:border-slate-800 text-xs text-surface-700 dark:text-slate-300 space-y-1">
+                <p className="font-extrabold">Shop Contact: <span className="text-primary-600 dark:text-primary-400 font-mono">Surya (8015587361)</span></p>
+                <p className="text-[11px] text-surface-500 dark:text-slate-400">Order will be printed and ready for pickup immediately!</p>
+              </div>
+
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(pricing?.upi_id || 'surya2092005-1@oksbi');
-                  alert('UPI ID copied to clipboard!');
-                }}
-                className="bg-surface-200 hover:bg-surface-300 text-surface-800 text-xs px-3 py-1.5 rounded-lg font-bold transition-all"
+                onClick={handleHandCashSubmit}
+                disabled={loading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-2xl font-black text-sm shadow-xl shadow-emerald-600/20 active:scale-[0.98] transition-all disabled:opacity-50"
               >
-                Copy
+                {loading ? 'Confirming Order...' : `Confirm Order with Hand Cash (₹${estimatedPrice.toFixed(2)}) →`}
               </button>
             </div>
-          </div>
+          )}
 
-          <div className="bg-white border border-surface-200 rounded-2xl p-4 space-y-4">
-            <div>
-              <label className="text-sm font-medium text-surface-700 mb-2 block">Upload Payment Screenshot</label>
-              {!screenshotFile ? (
-                <label className="flex items-center justify-center bg-surface-50 border-2 border-dashed border-surface-300 rounded-xl py-6 cursor-pointer hover:border-primary-400">
-                  <div className="text-center">
-                    <svg className="w-8 h-8 text-surface-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-sm text-surface-500">Upload screenshot</span>
+          {/* UPI PAYMENT CARD */}
+          {paymentMode === 'UPI' && (
+            <>
+              <div className="bg-white dark:bg-slate-900 border-2 border-primary-100 dark:border-slate-800 rounded-2xl p-5 space-y-4 text-center shadow-sm">
+                <h3 className="font-bold text-base text-surface-900 dark:text-white">
+                  Pay <span className="text-primary-600 dark:text-primary-400 text-xl font-extrabold">₹{estimatedPrice.toFixed(2)}</span> to Surya R
+                </h3>
+
+                {/* Live QR Code / Custom Uploaded QR Photo */}
+                <div className="flex flex-col items-center justify-center">
+                  <div className="bg-white p-3 rounded-2xl border-2 border-surface-200 shadow-md">
+                    <img
+                      src={
+                        pricing?.upi_qr_image_path ||
+                        `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                          `upi://pay?pa=${pricing?.upi_id || 'surya2092005-1@oksbi'}&pn=Surya%20R&am=${estimatedPrice.toFixed(2)}&cu=INR`
+                        )}`
+                      }
+                      alt="UPI QR Code"
+                      className="w-48 h-48 rounded-xl object-contain"
+                    />
                   </div>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                </label>
-              ) : (
-                <div className="flex items-center justify-between bg-surface-50 rounded-xl p-3">
-                  <span className="text-sm text-surface-700 truncate">{screenshotFile.name}</span>
+                  <p className="text-xs text-surface-500 mt-2 font-medium">Scan with GPay, PhonePe, Paytm, or BHIM</p>
+                </div>
+
+                {/* 1-Click Mobile Pay Button */}
+                <a
+                  href={`upi://pay?pa=${pricing?.upi_id || 'surya2092005-1@oksbi'}&pn=Surya%20R&am=${estimatedPrice.toFixed(2)}&cu=INR`}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <span>Tap to Pay ₹{estimatedPrice.toFixed(2)} via UPI App</span>
+                </a>
+
+                {/* UPI ID Copy Box */}
+                <div className="bg-surface-50 rounded-xl p-3 flex items-center justify-between border border-surface-200">
+                  <div className="text-left">
+                    <p className="text-[10px] text-surface-400 font-bold uppercase">UPI ID</p>
+                    <p className="font-mono text-sm font-bold text-surface-900 select-all">
+                      {pricing?.upi_id || 'surya2092005-1@oksbi'}
+                    </p>
+                  </div>
                   <button
-                    onClick={() => setScreenshotFile(null)}
-                    className="text-surface-400 hover:text-danger-500 ml-2"
+                    onClick={() => {
+                      navigator.clipboard.writeText(pricing?.upi_id || 'surya2092005-1@oksbi');
+                      alert('UPI ID copied to clipboard!');
+                    }}
+                    className="bg-surface-200 hover:bg-surface-300 text-surface-800 text-xs px-3 py-1.5 rounded-lg font-bold transition-all"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    Copy
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div>
-              <label htmlFor="utr" className="text-sm font-medium text-surface-700 mb-1.5 block">
-                UTR / Transaction Reference Number
-              </label>
-              <input
-                id="utr"
-                type="text"
-                value={utrNumber}
-                onChange={(e) => setUtrNumber(e.target.value)}
-                placeholder="Enter 12-digit UTR number"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-surface-300 bg-surface-50 text-surface-900 placeholder:text-surface-400 focus:border-primary-500 outline-none text-sm font-mono"
-              />
-            </div>
-          </div>
+              <div className="bg-white border border-surface-200 rounded-2xl p-4 space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-surface-700 mb-2 block">Upload Payment Screenshot</label>
+                  {!screenshotFile ? (
+                    <label className="flex items-center justify-center bg-surface-50 border-2 border-dashed border-surface-300 rounded-xl py-6 cursor-pointer hover:border-primary-400">
+                      <div className="text-center">
+                        <svg className="w-8 h-8 text-surface-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-sm text-surface-500">Upload screenshot</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                    </label>
+                  ) : (
+                    <div className="flex items-center justify-between bg-surface-50 rounded-xl p-3">
+                      <span className="text-sm text-surface-700 truncate">{screenshotFile.name}</span>
+                      <button
+                        onClick={() => setScreenshotFile(null)}
+                        className="text-surface-400 hover:text-danger-500 ml-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-          <button
-            onClick={handleSubmitPayment}
-            disabled={loading || !screenshotFile || !utrNumber.trim()}
-            className="w-full bg-primary-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
-          >
-            {loading ? 'Submitting...' : 'Submit Payment Proof'}
-          </button>
+                <div>
+                  <label htmlFor="utr" className="text-sm font-medium text-surface-700 mb-1.5 block">
+                    UTR / Transaction Reference Number
+                  </label>
+                  <input
+                    id="utr"
+                    type="text"
+                    value={utrNumber}
+                    onChange={(e) => setUtrNumber(e.target.value)}
+                    placeholder="Enter 12-digit UTR number"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-surface-300 bg-surface-50 text-surface-900 placeholder:text-surface-400 focus:border-primary-500 outline-none text-sm font-mono"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleSubmitPayment}
+                disabled={loading || !screenshotFile || !utrNumber.trim()}
+                className="w-full bg-primary-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                {loading ? 'Submitting...' : 'Submit Payment Proof'}
+              </button>
+            </>
+          )}
 
           <div className="flex gap-3 pt-1">
             <button

@@ -1,6 +1,5 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
 
@@ -24,15 +23,13 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
-  // Notifications state
+  // Notifications state (for admin)
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const hasBeenReadRef = useRef(false);
 
-  // Live Toast Popup Alert state
-  const [toastAlert, setToastAlert] = useState<{ title: string; message: string; code: string } | null>(null);
-  const prevStatusesRef = useRef<Record<string, string>>({});
+  const isAdmin = userRole === 'admin';
 
   // Initialize theme from localStorage / system preference
   useEffect(() => {
@@ -44,10 +41,6 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
     } else {
       setDarkMode(false);
       document.documentElement.classList.remove('dark');
-    }
-
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
     }
   }, []);
 
@@ -63,77 +56,25 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
     }
   };
 
-  // Poll orders for live notifications
+  // Fetch admin notifications
   const fetchNotifications = useCallback(async () => {
+    if (!isAdmin) return;
     try {
       const res = await fetch('/api/orders?limit=15');
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         const orderList = data.data;
 
-        // Detect status transitions for live Toast popup
-        const currentStatuses: Record<string, string> = {};
-        for (const o of orderList) {
-          currentStatuses[o.order_code] = o.order_status;
-          const prev = prevStatusesRef.current[o.order_code];
-
-          if (prev && prev !== o.order_status) {
-            let toastMessage = '';
-            if (o.order_status === 'READY_FOR_PICKUP') {
-              toastMessage = '🎉 Order is Ready for Pickup at Xerox Counter!';
-            } else if (o.order_status === 'COMPLETED') {
-              toastMessage = '✅ Order completed! Receipt available.';
-            } else if (o.order_status === 'PRINTING') {
-              toastMessage = '🖨️ Order is now Printing!';
-            } else if (o.order_status === 'ACCEPTED') {
-              toastMessage = '👍 Order accepted by shop!';
-            } else if (o.order_status === 'REJECTED') {
-              toastMessage = '❌ Payment rejected. Please check status.';
-            }
-
-            if (toastMessage) {
-              setToastAlert({
-                title: `Order #${o.order_code}`,
-                message: toastMessage,
-                code: o.order_code,
-              });
-
-              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-                new Notification(`CampusXerox: #${o.order_code}`, {
-                  body: toastMessage,
-                  icon: '/favicon.ico',
-                });
-              }
-
-              setTimeout(() => setToastAlert(null), 6000);
-            }
-          }
-        }
-        prevStatusesRef.current = currentStatuses;
-
-        // Map notification items
         const items: NotificationItem[] = orderList.map((o: { id: string; order_code: string; order_status: string; created_at: string }) => ({
           id: o.id,
           code: o.order_code,
           title: `Order #${o.order_code}`,
           status: o.order_status,
-          message:
-            o.order_status === 'READY_FOR_PICKUP'
-              ? '🎉 Ready for pickup at counter!'
-              : o.order_status === 'COMPLETED'
-              ? '✅ Order completed & receipt ready'
-              : o.order_status === 'PRINTING'
-              ? '🖨️ Order currently printing'
-              : o.order_status === 'ACCEPTED'
-              ? '👍 Order accepted by shop'
-              : o.order_status === 'PAYMENT_SUBMITTED'
-              ? '⌛ Payment submitted'
-              : `Status: ${o.order_status}`,
+          message: `Status: ${o.order_status}`,
           time: new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }));
 
         setNotifications(items);
-
         if (!hasBeenReadRef.current) {
           setUnreadCount(items.length);
         }
@@ -141,26 +82,26 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
     } catch {
       // Non-critical
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
+    if (isAdmin) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 8000);
+      return () => clearInterval(interval);
+    }
+  }, [fetchNotifications, isAdmin]);
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push('/login');
+  const handleAdminLogout = async () => {
+    await fetch('/api/auth/admin-logout', { method: 'POST' });
+    router.push('/admin-login');
+    router.refresh();
   };
 
   useEffect(() => {
     setMenuOpen(false);
     setNotifOpen(false);
   }, [pathname]);
-
-  const isAdmin = userRole === 'admin';
 
   return (
     <>
@@ -169,12 +110,12 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
           {/* Logo */}
           <button
             onClick={() => router.push(isAdmin ? '/admin' : '/dashboard')}
-            className="flex items-center gap-2 font-bold text-lg text-primary-600 dark:text-primary-400 hover:text-primary-700"
+            className="flex items-center gap-2 font-black text-lg text-primary-600 dark:text-primary-400 hover:text-primary-700"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            CampusXerox
+            <div className="bg-slate-900 px-2 py-1 rounded-lg border border-slate-700 flex items-center justify-center shadow-xs">
+              <span className="font-extrabold text-xs tracking-wider text-white font-mono uppercase">XEROX®</span>
+            </div>
+            <span>Campus<span className="text-surface-900 dark:text-white">Xerox</span></span>
             {isAdmin && (
               <span className="text-xs font-medium bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded-full">
                 Admin
@@ -207,70 +148,65 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
               )}
             </button>
 
-            {/* NOTIFICATION BELL */}
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setNotifOpen(!notifOpen);
-                  hasBeenReadRef.current = true;
-                  setUnreadCount(0);
-                }}
-                title="Notifications"
-                className="p-2 rounded-xl bg-surface-100 dark:bg-slate-800 text-surface-700 dark:text-slate-200 hover:bg-surface-200 dark:hover:bg-slate-700 transition-all relative active:scale-95 border border-surface-200 dark:border-slate-700"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-danger-500 text-white font-extrabold text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* HIGH-CONTRAST DARK MODE NOTIFICATION DROPDOWN */}
-              {notifOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border-2 border-surface-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 p-4 space-y-2.5 animate-fade-in text-surface-900 dark:text-slate-100">
-                  <div className="flex items-center justify-between pb-2 border-b border-surface-100 dark:border-slate-800">
-                    <span className="text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-slate-400">
-                      Notifications ({notifications.length})
+            {/* ADMIN NOTIFICATION BELL ONLY */}
+            {isAdmin && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setNotifOpen(!notifOpen);
+                    hasBeenReadRef.current = true;
+                    setUnreadCount(0);
+                  }}
+                  title="Notifications"
+                  className="p-2 rounded-xl bg-surface-100 dark:bg-slate-800 text-surface-700 dark:text-slate-200 hover:bg-surface-200 dark:hover:bg-slate-700 transition-all relative active:scale-95 border border-surface-200 dark:border-slate-700"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-danger-500 text-white font-extrabold text-[9px] rounded-full flex items-center justify-center animate-pulse shadow-sm">
+                      {unreadCount}
                     </span>
-                    <button onClick={() => setNotifOpen(false)} className="text-xs text-surface-400 dark:text-slate-400 hover:text-surface-600 dark:hover:text-white">
-                      ✕
-                    </button>
-                  </div>
+                  )}
+                </button>
 
-                  <div className="max-h-64 overflow-y-auto space-y-2 scrollbar-thin">
-                    {notifications.length > 0 ? (
-                      notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            setNotifOpen(false);
-                            router.push(isAdmin ? `/admin/orders/${n.code}` : `/dashboard/orders/${n.code}`);
-                          }}
-                          className={`p-3 rounded-xl border transition-all cursor-pointer text-xs ${
-                            n.status === 'READY_FOR_PICKUP'
-                              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200'
-                              : n.status === 'COMPLETED'
-                              ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200'
-                              : 'bg-surface-50 dark:bg-slate-800/80 border-surface-200 dark:border-slate-700 text-surface-800 dark:text-slate-200 hover:border-primary-400'
-                          }`}
-                        >
-                          <div className="flex justify-between font-bold text-xs mb-1">
-                            <span>{n.title}</span>
-                            <span className="text-[10px] opacity-75 font-mono">{n.time}</span>
+                {notifOpen && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border-2 border-surface-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 p-4 space-y-2.5 animate-fade-in text-surface-900 dark:text-slate-100">
+                    <div className="flex items-center justify-between pb-2 border-b border-surface-100 dark:border-slate-800">
+                      <span className="text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-slate-400">
+                        Admin Notifications ({notifications.length})
+                      </span>
+                      <button onClick={() => setNotifOpen(false)} className="text-xs text-surface-400 dark:text-slate-400 hover:text-surface-600 dark:hover:text-white">
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto space-y-2 scrollbar-thin">
+                      {notifications.length > 0 ? (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              setNotifOpen(false);
+                              router.push(`/admin/orders/${n.code}`);
+                            }}
+                            className="p-3 rounded-xl border bg-surface-50 dark:bg-slate-800/80 border-surface-200 dark:border-slate-700 text-surface-800 dark:text-slate-200 hover:border-primary-400 transition-all cursor-pointer text-xs"
+                          >
+                            <div className="flex justify-between font-bold text-xs mb-1">
+                              <span>{n.title}</span>
+                              <span className="text-[10px] opacity-75 font-mono">{n.time}</span>
+                            </div>
+                            <p className="text-[11px] font-medium opacity-90 leading-snug">{n.message}</p>
                           </div>
-                          <p className="text-[11px] font-medium opacity-90 leading-snug">{n.message}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-center py-4 text-surface-400 dark:text-slate-500">No notifications yet</p>
-                    )}
+                        ))
+                      ) : (
+                        <p className="text-xs text-center py-4 text-surface-400 dark:text-slate-500">No notifications</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Desktop nav links */}
             <div className="hidden sm:flex items-center gap-3">
@@ -282,25 +218,27 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
                   <NavLink href="/admin/settings" active={pathname === '/admin/settings'}>
                     Settings
                   </NavLink>
+                  <div className="h-6 w-px bg-surface-200 dark:bg-slate-700" />
+                  <button
+                    onClick={handleAdminLogout}
+                    className="text-xs text-surface-500 hover:text-danger-600 dark:hover:text-danger-400 font-bold bg-danger-50 dark:bg-danger-950/40 px-3 py-1.5 rounded-xl border border-danger-200 dark:border-danger-800"
+                  >
+                    Admin Logout
+                  </button>
                 </>
               ) : (
                 <>
                   <NavLink href="/dashboard" active={pathname === '/dashboard'}>
                     Home
                   </NavLink>
-                  <NavLink href="/dashboard/orders" active={pathname === '/dashboard/orders'}>
-                    My Orders
-                  </NavLink>
+                  <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-3 py-1 rounded-xl border border-amber-200 dark:border-amber-800 text-xs font-extrabold">
+                    <span>Contact Surya:</span>
+                    <a href="tel:8015587361" className="underline hover:text-amber-900 dark:hover:text-amber-100">
+                      8015587361
+                    </a>
+                  </div>
                 </>
               )}
-              <div className="h-6 w-px bg-surface-200 dark:bg-slate-700" />
-              <span className="text-xs font-semibold text-surface-600 dark:text-slate-300">{userName}</span>
-              <button
-                onClick={handleLogout}
-                className="text-xs text-surface-500 hover:text-danger-600 dark:hover:text-danger-400 font-medium"
-              >
-                Logout
-              </button>
             </div>
 
             {/* Mobile hamburger */}
@@ -332,57 +270,30 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
                   <MobileNavLink href="/admin/settings" onClick={() => router.push('/admin/settings')}>
                     Settings
                   </MobileNavLink>
+                  <button
+                    onClick={handleAdminLogout}
+                    className="w-full text-left text-sm text-danger-600 dark:text-danger-400 font-bold px-3 py-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-900/20"
+                  >
+                    Admin Logout
+                  </button>
                 </>
               ) : (
                 <>
                   <MobileNavLink href="/dashboard" onClick={() => router.push('/dashboard')}>
                     Home
                   </MobileNavLink>
-                  <MobileNavLink href="/dashboard/orders" onClick={() => router.push('/dashboard/orders')}>
-                    My Orders
-                  </MobileNavLink>
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/60 rounded-xl text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center justify-between border border-amber-200 dark:border-amber-800">
+                    <span>Contact Person: Surya</span>
+                    <a href="tel:8015587361" className="underline font-mono">
+                      8015587361
+                    </a>
+                  </div>
                 </>
               )}
-              <div className="pt-2 border-t border-surface-100 dark:border-slate-800">
-                <p className="text-sm text-surface-400 px-3 py-1">{userName}</p>
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left text-sm text-danger-600 dark:text-danger-400 font-medium px-3 py-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-900/20"
-                >
-                  Logout
-                </button>
-              </div>
             </div>
           </div>
         )}
       </nav>
-
-      {/* LIVE TOAST POPUP NOTIFICATION BANNER */}
-      {toastAlert && (
-        <div className="fixed bottom-5 right-5 z-50 animate-slide-up max-w-sm w-full bg-white dark:bg-slate-800 border-2 border-primary-500 rounded-2xl p-4 shadow-2xl flex items-start justify-between gap-3 text-surface-900 dark:text-slate-100">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-primary-500/20 text-primary-600 rounded-xl flex items-center justify-center shrink-0">
-              🔔
-            </div>
-            <div>
-              <p className="font-bold text-sm">{toastAlert.title}</p>
-              <p className="text-xs text-surface-600 dark:text-slate-300 mt-0.5">{toastAlert.message}</p>
-              <button
-                onClick={() => {
-                  setToastAlert(null);
-                  router.push(isAdmin ? `/admin/orders/${toastAlert.code}` : `/dashboard/orders/${toastAlert.code}`);
-                }}
-                className="text-xs text-primary-600 dark:text-primary-400 font-bold mt-1.5 hover:underline"
-              >
-                View Order Details →
-              </button>
-            </div>
-          </div>
-          <button onClick={() => setToastAlert(null)} className="text-surface-400 hover:text-surface-600 text-xs">
-            ✕
-          </button>
-        </div>
-      )}
     </>
   );
 }
