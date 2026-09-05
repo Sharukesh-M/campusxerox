@@ -112,9 +112,6 @@ export default function Navbar({ userName, userRole }: NavbarProps) {
             onClick={() => router.push(isAdmin ? '/admin' : '/dashboard')}
             className="flex items-center gap-2 font-black text-lg text-primary-600 dark:text-primary-400 hover:text-primary-700"
           >
-            <div className="bg-slate-900 px-2 py-1 rounded-lg border border-slate-700 flex items-center justify-center shadow-xs">
-              <span className="font-extrabold text-xs tracking-wider text-white font-mono uppercase">XEROX®</span>
-            </div>
             <span>Campus<span className="text-surface-900 dark:text-white">Xerox</span></span>
             {isAdmin && (
               <span className="text-xs font-medium bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded-full">

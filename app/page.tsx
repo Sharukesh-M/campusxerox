@@ -10,9 +10,6 @@ export default function HomePage() {
       <nav className="max-w-5xl w-full mx-auto px-4 py-3 sm:h-16 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 relative z-20">
         <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-2 font-black text-xl text-primary-600 dark:text-primary-400">
-            <div className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 flex items-center justify-center shadow-xs">
-              <span className="font-extrabold text-xs tracking-wider text-white font-mono uppercase">XEROX®</span>
-            </div>
             <span>Campus<span className="text-surface-900 dark:text-white">Xerox</span></span>
           </div>
 
@@ -40,9 +37,6 @@ export default function HomePage() {
       <header className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center relative z-10">
         {/* Logo & Headline */}
         <div className="mb-8 animate-fade-in max-w-2xl">
-          <div className="inline-flex items-center justify-center px-6 py-3 bg-slate-950 text-white rounded-2xl mb-6 shadow-xl border border-slate-800 transform hover:scale-105 transition-all duration-300">
-            <span className="font-extrabold text-2xl tracking-widest font-mono text-white">XEROX®</span>
-          </div>
           <h1 className="text-4xl sm:text-6xl font-black text-surface-900 dark:text-white tracking-tight">
             Campus<span className="gradient-text">Xerox</span>
           </h1>
