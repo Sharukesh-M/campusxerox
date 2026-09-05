@@ -74,7 +74,7 @@ export async function sendAdminNtfyNotification({
   priority?: 'low' | 'default' | 'high' | 'urgent';
   tags?: string[];
 }) {
-  const topic = process.env.NTFY_TOPIC || 'campus_xerox_admin_9345253776';
+  const topic = process.env.NTFY_TOPIC || 'campus_xerox_admin_2027';
   try {
     const headers: Record<string, string> = {
       'Title': title,
