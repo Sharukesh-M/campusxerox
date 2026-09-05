@@ -87,14 +87,17 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-in space-y-6">
       {/* Welcome Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div>
           <h1 className="text-2xl font-black text-surface-900 dark:text-white tracking-tight">
             CampusXerox
           </h1>
         </div>
-        <div className="bg-[#e6ebf4] dark:bg-[#131b2e] shadow-[4px_4px_10px_#c2cad8,-4px_-4px_10px_#ffffff] dark:shadow-[4px_4px_10px_#070b14,-4px_-4px_10px_#172340] px-4 py-2.5 rounded-2xl border border-white/60 dark:border-slate-800 text-xs font-bold text-surface-900 dark:text-slate-200 shrink-0">
-          <span className="text-surface-500 dark:text-slate-400">Contact:</span> <strong className="text-primary-600 dark:text-primary-400">Surya</strong> · <a href="tel:8015587361" className="underline font-mono text-sm">8015587361</a>
+        <div className="bg-[#e6ebf4] dark:bg-[#131b2e] shadow-[4px_4px_10px_#c2cad8,-4px_-4px_10px_#ffffff] dark:shadow-[4px_4px_10px_#070b14,-4px_-4px_10px_#172340] px-3.5 py-2 rounded-2xl border border-white/60 dark:border-slate-800 text-xs font-bold text-surface-900 dark:text-slate-200 flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto shrink-0">
+          <span className="text-surface-500 dark:text-slate-400">Contact: <strong className="text-primary-600 dark:text-primary-400">Surya</strong></span>
+          <a href="tel:8015587361" className="underline font-mono text-xs sm:text-sm bg-white dark:bg-slate-900 px-2.5 py-1 rounded-xl border border-surface-200 dark:border-slate-700 text-primary-600 dark:text-primary-400">
+            8015587361
+          </a>
         </div>
       </div>
 

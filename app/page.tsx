@@ -7,14 +7,25 @@ export default function HomePage() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-primary-500/20 via-purple-500/15 to-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header Bar */}
-      <nav className="max-w-5xl w-full mx-auto px-4 h-16 flex items-center justify-between relative z-20">
-        <div className="flex items-center gap-2 font-black text-xl text-primary-600 dark:text-primary-400">
-          <div className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 flex items-center justify-center shadow-xs">
-            <span className="font-extrabold text-xs tracking-wider text-white font-mono uppercase">XEROX®</span>
+      <nav className="max-w-5xl w-full mx-auto px-4 py-3 sm:h-16 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 relative z-20">
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <div className="flex items-center gap-2 font-black text-xl text-primary-600 dark:text-primary-400">
+            <div className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 flex items-center justify-center shadow-xs">
+              <span className="font-extrabold text-xs tracking-wider text-white font-mono uppercase">XEROX®</span>
+            </div>
+            <span>Campus<span className="text-surface-900 dark:text-white">Xerox</span></span>
           </div>
-          <span>Campus<span className="text-surface-900 dark:text-white">Xerox</span></span>
+
+          <a
+            href="tel:8015587361"
+            className="sm:hidden text-[11px] font-extrabold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-xl transition-all hover:bg-amber-100 flex items-center gap-1 shadow-xs shrink-0"
+          >
+            <span>Surya:</span>
+            <span className="font-mono underline">8015587361</span>
+          </a>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="hidden sm:flex items-center gap-3">
           <a
             href="tel:8015587361"
             className="text-xs font-extrabold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-3.5 py-1.5 rounded-xl transition-all hover:bg-amber-100 flex items-center gap-1.5 shadow-sm"
